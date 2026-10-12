@@ -71,11 +71,13 @@ export default function Home() {
   const [status, setStatus] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [busy, setBusy] = useState(false);
+  const [workerLastSeen, setWorkerLastSeen] = useState<string | null>(null);
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
   const [captureProject, setCaptureProject] = useState("expert_b");
   const [captureKind, setCaptureKind] = useState<TemplateKind>("signal_down");
   const didLoad = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const configDirty = useRef(false);
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
@@ -93,6 +95,7 @@ export default function Home() {
     }));
 
   async function loadConfig(silent = false) {
+    if (silent && configDirty.current) return;
     try {
       const response = await fetch("/api/config", { cache: "no-store" });
       const result = await response.json();
@@ -100,6 +103,7 @@ export default function Home() {
       setProjects(result.projects || []);
       setMessages(result.messages || []);
       setSignals(result.signals || []);
+      setWorkerLastSeen(result.workerLastSeen || null);
       if (!projectId && result.projects?.[0]?.id) setProjectId(result.projects[0].id);
       if (!silent) setStatus("");
       didLoad.current = true;
@@ -115,7 +119,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!didLoad.current) return;
+    if (!didLoad.current || !configDirty.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveState !== "saving" && setSaveState("idle");
     saveTimer.current = setTimeout(() => saveConfig(), 900);
@@ -164,8 +168,7 @@ export default function Home() {
       });
       const result = await response.json();
       if (!result.ok) throw new Error(result.error || "Falha ao salvar");
-      setProjects(result.projects || []);
-      setMessages(result.messages || []);
+      configDirty.current = false;
       setSaveState("saved");
     } catch (error) {
       setSaveState("error");
@@ -257,15 +260,36 @@ export default function Home() {
     }
   }
 
+  async function sendStandardNow(targetProjectId: string, kind: MessageKind) {
+    setBusy(true);
+    setStatus("Enviando mensagem...");
+    try {
+      const response = await fetch("/api/send-message", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: targetProjectId, kind }),
+      });
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error || "Falha no envio");
+      setStatus("Mensagem enviada ao canal.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Falha no envio");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function patchProject(id: string, patch: Partial<ProjectSettings>) {
+    configDirty.current = true;
     setProjects((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
 
   function patchMessage(id: string, patch: Partial<SavedMessage>) {
+    configDirty.current = true;
     setMessages((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
 
   function patchMessageTime(id: string, day: DayMode, value: string) {
+    configDirty.current = true;
     setMessages((items) => items.map((item) => item.id === id ? { ...item, timeByDay: { ...item.timeByDay, [day]: value } } : item));
   }
 
@@ -346,9 +370,16 @@ export default function Home() {
               <div className="field"><label>Texto do botão</label><input value={project.brokerLabel} onChange={(event) => patchProject(project.id, { brokerLabel: event.target.value })} /></div>
             </div>
             <TemplateStatus project={project} />
+            <div className="standard-tests">
+              {messageKinds.map((kind) => <div className="standard-test" key={kind}>
+                <span>{captureLabels[kind]}</span>
+                <button disabled={busy || !project.chatId} onClick={() => sendStandardNow(project.id, kind)}><Send size={14} /> Enviar agora</button>
+              </div>)}
+            </div>
           </details>)}
 
           <details className="panel project-config" open><summary>Horários automáticos</summary>
+            <p className="muted">{workerLastSeen && Date.now() - Date.parse(workerLastSeen) < 120000 ? "Automático conectado" : "Automático sem confirmação recente"} · Horários de Brasília</p>
             <div className="schedule-list">
               {messages.map((message) => <div className="schedule-line" key={message.id}><strong>{message.label}</strong>{(["weekday", "saturday", "sunday"] as DayMode[]).map((day) => <div className="field" key={day}><label>{dayLabels[day]}</label><input value={message.timeByDay[day] || ""} onChange={(event) => patchMessageTime(message.id, day, event.target.value)} /></div>)}<label className="check"><input type="checkbox" checked={message.enabled} onChange={(event) => patchMessage(message.id, { enabled: event.target.checked })} /> Ativa</label></div>)}
             </div>

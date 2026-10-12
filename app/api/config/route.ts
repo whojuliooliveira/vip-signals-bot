@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectsConfig } from "../../../lib/projects";
 import { loadStore, saveStore } from "../../../lib/store";
+import { hasSupabase, supabaseSelect } from "../../../lib/supabase";
 
 export async function GET() {
   try {
@@ -15,7 +16,8 @@ export async function GET() {
         chatId: runtime?.chatId || project.chatId || "",
       };
     });
-    return NextResponse.json({ ok: true, messages: store.messages, projects, signals: store.signals, logs: store.logs.slice(0, 100), sentScheduleKeys: store.sentScheduleKeys });
+    const heartbeat = hasSupabase() ? await supabaseSelect<{ created_at: string }>("schedule_keys", "select=created_at&id=eq.worker-heartbeat") : [];
+    return NextResponse.json({ ok: true, workerLastSeen: heartbeat[0]?.created_at || null, messages: store.messages, projects, signals: store.signals, logs: store.logs.slice(0, 100), sentScheduleKeys: store.sentScheduleKeys });
   } catch (error) {
     return NextResponse.json({
       ok: false,
@@ -38,6 +40,8 @@ export async function POST(request: NextRequest) {
         ...current,
         ...project,
         botToken: project.botToken ? project.botToken : current.botToken,
+        signalTemplates: current.signalTemplates,
+        messageTemplates: current.messageTemplates,
       });
     }
     store.projects = Array.from(byId.values());

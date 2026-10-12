@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectConfig } from "../../../lib/projects";
 import { isSignalDueNow, validateSignalTime } from "../../../lib/signals";
-import { escapeHtml, renderSignal } from "../../../lib/templates";
+import { renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
+import { standardMessagePayload } from "../../../lib/standardMessages";
+import { hasSupabase, supabaseUpsert } from "../../../lib/supabase";
 import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveStore, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
 
 function authorized(request: NextRequest) {
@@ -10,10 +12,6 @@ function authorized(request: NextRequest) {
   const secret = request.headers.get("x-cron-secret") || bearer || request.nextUrl.searchParams.get("secret");
   const expected = process.env.CRON_SECRET || process.env.ADMIN_PASSWORD;
   return Boolean(expected && secret === expected);
-}
-
-function renderSavedMessage(projectName: string, text: string) {
-  return [`<b>${escapeHtml(projectName)}</b>`, escapeHtml(text)].join("\n");
 }
 
 function scheduledMessageTime(message: SavedMessage, mode: DayMode, weekday: Weekday) {
@@ -31,37 +29,29 @@ async function runSchedule(request: NextRequest) {
   const time = request.nextUrl.searchParams.get("time") || localTime(now);
   const dateKey = request.nextUrl.searchParams.get("date") || localDateKey(now);
   const store = await loadStore();
-  const dueMessages = store.messages.filter((message) => message.enabled && scheduledMessageTime(message, mode, weekday) === time);
+  const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const dueMessages = store.messages.filter((message) => {
+    const scheduled = scheduledMessageTime(message, mode, weekday);
+    const delay = scheduled ? minutes(time) - minutes(scheduled) : -1;
+    return message.enabled && delay >= 0 && delay < 5;
+  });
   const results = [];
 
   for (const message of dueMessages) {
     for (const projectId of message.projects) {
+      if (!store.projects.find((item) => item.id === projectId)?.enabled) continue;
       const project = await getProjectConfig(projectId);
       if (!project) continue;
 
-      const key = scheduledKey(dateKey, time, message.id, project.id);
+      const key = scheduledKey(dateKey, scheduledMessageTime(message, mode, weekday)!, message.id, project.id);
       if (store.sentScheduleKeys.includes(key)) {
         results.push({ projectId: project.id, label: message.label, skipped: true });
         continue;
       }
 
       const body = message.textByLanguage[project.language] || message.textByLanguage.en || message.textByLanguage.es || "";
-      const template = project.messageTemplates?.[message.kind];
-      const renderedMessage = template?.text
-        ? { text: template.text, entities: template.entities }
-        : { text: template?.html || renderSavedMessage(project.name, body) };
-
       try {
-        const sent = await sendTelegramMessage(project.botToken, {
-          chatId: project.chatId,
-          chatTitle: project.name,
-          text: renderedMessage.text,
-          entities: renderedMessage.entities,
-          media: template?.media,
-          buttons: template?.buttons,
-          buttonText: message.includeInlineButton ? project.brokerLabel : undefined,
-          buttonUrl: message.includeInlineButton ? project.link : undefined,
-        });
+        const sent = await sendTelegramMessage(project.botToken, standardMessagePayload(project, message));
 
         store.sentScheduleKeys.push(key);
         const log: SendLog = {
@@ -104,6 +94,7 @@ async function runSchedule(request: NextRequest) {
     && isSignalDueNow(signal.dateKey, signal.time, now)
   ));
   for (const signal of dueSignals) {
+    if (!store.projects.find((item) => item.id === signal.projectId)?.enabled) continue;
     const project = await getProjectConfig(signal.projectId);
     if (!project) continue;
 
@@ -166,7 +157,8 @@ async function runSchedule(request: NextRequest) {
   }
 
   store.sentScheduleKeys = store.sentScheduleKeys.slice(-5000);
-  await saveStore(store);
+  if (results.some((item) => !('skipped' in item))) await saveStore(store);
+  if (hasSupabase()) await supabaseUpsert("schedule_keys", [{ id: "worker-heartbeat", created_at: new Date().toISOString() }]);
   return NextResponse.json({ ok: true, mode, time, dateKey, due: dueMessages.length + dueSignals.length, results });
 }
 

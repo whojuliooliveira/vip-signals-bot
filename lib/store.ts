@@ -123,9 +123,9 @@ export function uid(prefix: string) {
 }
 
 export function dayMode(date = new Date()): DayMode {
-  const day = date.getDay();
-  if (day === 0) return "sunday";
-  if (day === 6) return "saturday";
+  const day = localWeekday(date);
+  if (day === "sunday") return "sunday";
+  if (day === "saturday") return "saturday";
   return "weekday";
 }
 
@@ -316,9 +316,9 @@ function normalizeMessages(messages: SavedMessage[]) {
     return {
       ...message,
       label: message.label || defaults.label,
-      projects: message.kind === "custom" ? message.projects : ["expert_a", "expert_b"],
-      timeByDay: defaults.timeByDay,
-      timeByWeekday: defaults.timeByWeekday,
+      projects: message.projects || defaults.projects,
+      timeByDay: { ...defaults.timeByDay, ...message.timeByDay },
+      timeByWeekday: message.timeByWeekday || defaults.timeByWeekday,
     };
   });
 }

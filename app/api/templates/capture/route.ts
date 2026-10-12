@@ -117,8 +117,12 @@ function capturedTemplateFromMessage(kind: TemplateKind, message: TelegramCaptur
           ? { type: "document" as const, fileId: message.document.file_id }
           : undefined;
 
-  const html = normalizeTemplate(telegramMessageToHtml(message), projectName, brokerLink);
-  const native = normalizeNativeTemplate(message, projectName, brokerLink);
+  const isSignal = kind === "signal_up" || kind === "signal_down";
+  const html = isSignal ? normalizeTemplate(telegramMessageToHtml(message), projectName, brokerLink) : telegramMessageToHtml(message);
+  const native = isSignal ? normalizeNativeTemplate(message, projectName, brokerLink) : {
+    text: message.text || message.caption || "",
+    entities: message.text ? message.entities || [] : message.caption_entities || [],
+  };
   return {
     id: uid("tpl"),
     kind,

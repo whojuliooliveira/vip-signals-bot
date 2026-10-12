@@ -25,6 +25,7 @@ async function tick() {
       headers: {
         authorization: `Bearer ${secret}`,
       },
+      signal: AbortSignal.timeout(55_000),
     });
     const body = await response.text();
 
