@@ -23,6 +23,11 @@ export function directionLabel(locale: Locale, direction: Direction) {
   return direction === "UP" ? "BUY 🟢" : "SELL 🔴";
 }
 
+export function directionText(locale: Locale, direction: Direction) {
+  if (locale === "es") return direction === "UP" ? "ARRIBA" : "ABAJO";
+  return direction === "UP" ? "BUY" : "SELL";
+}
+
 export function signalBadge(locale: Locale) {
   return locale === "es" ? "▌◎ SEÑAL VIP ◎  ❞" : "▌◎ VIP SIGNAL ◎  ❞";
 }
@@ -68,7 +73,7 @@ export function renderSavedSignalTemplate(templateHtml: string, payload: SignalP
     title: escapeHtml(payload.title),
     pair: escapeHtml(payload.pair.trim().toUpperCase()),
     market: escapeHtml(payload.market.trim().toUpperCase() || "OTC"),
-    direction: escapeHtml(directionLabel(payload.locale, payload.direction)),
+    direction: escapeHtml(directionText(payload.locale, payload.direction)),
     time: escapeHtml(payload.time),
     expiry: String(payload.expiryMinutes),
     reentries: String(payload.reentries),

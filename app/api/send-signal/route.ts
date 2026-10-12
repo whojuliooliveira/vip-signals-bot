@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
         text,
         media: body.kind === "custom" ? undefined : project.signalTemplates?.[String(body.direction || "DOWN") as Direction]?.media,
         buttons: body.kind === "custom" ? undefined : project.signalTemplates?.[String(body.direction || "DOWN") as Direction]?.buttons,
-        buttonText: body.includeInlineButton ? project.brokerLabel : undefined,
-        buttonUrl: body.includeInlineButton ? project.link : undefined,
+        buttonText: body.kind === "custom" && body.includeInlineButton ? project.brokerLabel : undefined,
+        buttonUrl: body.kind === "custom" && body.includeInlineButton ? project.link : undefined,
       });
       await appendLog({
         id: uid("log"),

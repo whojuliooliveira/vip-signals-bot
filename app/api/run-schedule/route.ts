@@ -125,8 +125,6 @@ async function runSchedule(request: NextRequest) {
         text,
         media: project.signalTemplates?.[signal.direction]?.media,
         buttons: project.signalTemplates?.[signal.direction]?.buttons,
-        buttonText: project.brokerLabel,
-        buttonUrl: project.link,
       });
       signal.sentAt = now.toISOString();
       signal.messageId = sent?.message_id;
