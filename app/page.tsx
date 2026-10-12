@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock3, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, signalDueTimeForRuntime, signalSendWindowExpiresAtMs, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, signalDueTimeForRuntime, signalSendWindowExpiresAtMs, type ParsedSignal, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -81,6 +81,7 @@ export default function Home() {
   const [dateKey, setDateKey] = useState(today);
   const [rawText, setRawText] = useState("");
   const [status, setStatus] = useState("");
+  const [adminSecret, setAdminSecret] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [busy, setBusy] = useState(false);
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
@@ -91,6 +92,7 @@ export default function Home() {
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
+  const fullParsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
   const selectedQueue = useMemo(() => {
     const now = Date.now();
     return signals.filter((signal) => (
@@ -120,6 +122,7 @@ export default function Home() {
   }
 
   useEffect(() => {
+    setAdminSecret(localStorage.getItem("vipSignalsAdminSecret") || "");
     loadConfig();
     const timer = setInterval(() => loadConfig(true), 12000);
     return () => clearInterval(timer);
@@ -216,6 +219,59 @@ export default function Home() {
     }
   }
 
+  async function sendSignalNow(signal: ParsedSignal) {
+    let secret = adminSecret;
+    if (!secret) {
+      secret = window.prompt("Senha do painel para salvar neste navegador:") || "";
+      if (!secret) return;
+      localStorage.setItem("vipSignalsAdminSecret", secret);
+      setAdminSecret(secret);
+    }
+
+    setBusy(true);
+    setStatus(`Enviando ${signal.pair} ${signal.time} agora...`);
+    try {
+      const response = await fetch("/api/send-signal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": secret,
+        },
+        body: JSON.stringify({
+          kind: "signal",
+          projectId,
+          pair: signal.pair,
+          market: signal.market,
+          direction: signal.direction,
+          time: signal.time,
+          expiryMinutes: signal.expiryMinutes || 5,
+          reentries: 2,
+          includeInlineButton: true,
+        }),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem("vipSignalsAdminSecret");
+          setAdminSecret("");
+        }
+        throw new Error(result.error || "Falha ao enviar");
+      }
+      setStatus(`${signal.pair} ${signal.time} enviado agora.`);
+      await loadConfig(true);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao enviar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function clearSavedSecret() {
+    localStorage.removeItem("vipSignalsAdminSecret");
+    setAdminSecret("");
+    setStatus("Senha salva removida deste navegador.");
+  }
+
   async function startCapture() {
     setBusy(true);
     setStatus("");
@@ -309,11 +365,20 @@ export default function Home() {
 
           <aside className="side-stack">
             <div className="panel">
-              <div className="preview-head"><CheckCircle2 size={18} /> Prévia da lista colada</div>
-              <div className="validation-summary"><strong>{parsed.signals.length}</strong><span>sinais válidos no texto</span></div>
-              {parsed.errors.length > 0 && <ErrorList errors={parsed.errors} />}
-              <div className="detected-list compact-detected">
-                {parsed.signals.slice(0, 80).map((signal, index) => <div className="detected-item" key={`${signal.time}-${signal.pair}-${index}`}><b>{signal.time}</b><span>{signal.pair}</span><em>{signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</em><small>{signal.market}</small></div>)}
+              <div className="preview-head"><CheckCircle2 size={18} /> Lista completa lida</div>
+              <div className="validation-summary"><strong>{fullParsed.signals.length}</strong><span>sinais reconhecidos</span></div>
+              {fullParsed.errors.length > 0 && <ErrorList errors={fullParsed.errors} />}
+              <div className="secret-row">
+                <span>{adminSecret ? "Senha salva neste navegador" : "Envio manual pede a senha só uma vez"}</span>
+                {adminSecret && <button className="tiny-button" onClick={clearSavedSecret}>trocar</button>}
+              </div>
+              <div className="detected-list full-detected">
+                {fullParsed.signals.slice(0, 160).map((signal, index) => <div className={`signal-row ${signal.validationError ? "outside" : "inside"}`} key={`${signal.time}-${signal.pair}-${index}`}>
+                  <b>{signal.time}</b>
+                  <span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</span>
+                  <em>{signal.validationError ? "fora da regra" : "entra na fila"}</em>
+                  <button disabled={busy} onClick={() => sendSignalNow(signal)}>Enviar agora</button>
+                </div>)}
               </div>
             </div>
             <div className="panel">

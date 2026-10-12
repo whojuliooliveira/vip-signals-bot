@@ -181,6 +181,14 @@ pre { margin: 0; white-space: pre-wrap; border: 1px solid var(--border); border-
 .submit-list { width: fit-content; min-width: 160px; margin-left: auto; }
 .side-stack { display: grid; gap: 12px; }
 .compact-detected { max-height: 330px; }
+.full-detected { max-height: 460px; }
+.secret-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--border); border-radius: 6px; background: #171717; color: var(--muted); padding: 8px 10px; margin-bottom: 10px; font-size: 12px; }
+.tiny-button { min-height: 30px; padding: 5px 8px; font-size: 12px; }
+.signal-row { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr) 82px 104px; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 6px; background: #171717; padding: 8px 8px; font-size: 12px; }
+.signal-row span { color: #d5d5d5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signal-row em { color: var(--green); font-style: normal; text-align: right; }
+.signal-row.outside em { color: #ffbd7a; }
+.signal-row button { min-height: 32px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
 .run-now { width: 100%; margin-bottom: 10px; }
 .queue-list { display: grid; gap: 7px; max-height: 360px; overflow: auto; }
 .queue-item { min-width: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr) 74px; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 6px; background: #171717; padding: 8px 10px; font-size: 13px; }

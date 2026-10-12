@@ -9,6 +9,7 @@ export type ParsedSignal = {
   projectId?: string;
   platform?: "quotex" | "pocket";
   sourceText: string;
+  validationError?: string;
 };
 
 export type SignalParseError = {
@@ -20,6 +21,10 @@ export type SignalParseError = {
 export type SignalParseResult = {
   signals: ParsedSignal[];
   errors: SignalParseError[];
+};
+
+type ParseSignalOptions = {
+  includeOutOfCriteria?: boolean;
 };
 
 const directionMap: Record<string, Direction> = {
@@ -43,7 +48,7 @@ const operationEnd = "03:30";
 const signalLeadMinutes = 5;
 const signalGraceMinutes = 5;
 
-export function parseSignalInput(input: string): SignalParseResult {
+export function parseSignalInput(input: string, options: ParseSignalOptions = {}): SignalParseResult {
   const signals: ParsedSignal[] = [];
   const errors: SignalParseError[] = [];
   const seen = new Set<string>();
@@ -67,7 +72,7 @@ export function parseSignalInput(input: string): SignalParseResult {
       const time = normalizeTime(semicolon[3]);
       const direction = directionMap[semicolon[4].toUpperCase()];
       const timeError = validateSignalTime(time);
-      if (timeError) {
+      if (timeError && !options.includeOutOfCriteria) {
         errors.push({ lineNumber: index + 1, line, error: timeError });
         continue;
       }
@@ -75,7 +80,7 @@ export function parseSignalInput(input: string): SignalParseResult {
       const key = `${projectId || "manual"}:${pair}:OTC:${direction}:${time}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      signals.push({ pair, market: "OTC", direction, time, expiryMinutes, projectId, platform, sourceText: line });
+      signals.push({ pair, market: "OTC", direction, time, expiryMinutes, projectId, platform, sourceText: line, validationError: timeError || undefined });
       continue;
     }
 
@@ -90,7 +95,7 @@ export function parseSignalInput(input: string): SignalParseResult {
     }
 
     const timeError = validateSignalTime(time);
-    if (timeError) {
+    if (timeError && !options.includeOutOfCriteria) {
       errors.push({ lineNumber: index + 1, line, error: timeError });
       continue;
     }
@@ -99,7 +104,7 @@ export function parseSignalInput(input: string): SignalParseResult {
     const key = `${pair}:${market}:${direction}:${time}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    signals.push({ pair, market, direction, time, sourceText: line });
+    signals.push({ pair, market, direction, time, sourceText: line, validationError: timeError || undefined });
   }
 
   return { signals: signals.sort((a, b) => signalSortValue(a.time) - signalSortValue(b.time)), errors };
