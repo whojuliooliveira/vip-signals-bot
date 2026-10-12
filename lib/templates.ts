@@ -100,10 +100,11 @@ export function escapeHtml(value: string) {
 }
 
 function forceBrokerLine(html: string, payload: SignalPayload) {
-  const safeLabel = escapeHtml(payload.brokerLabel || "Click here");
+  const brokerLabel = payload.brokerLabel || (payload.locale === "es" ? "Haz clic aquí" : "Click here");
+  const safeLabel = escapeHtml(payload.locale === "en" && brokerLabel.toLowerCase() === "click here" ? "Click Here" : brokerLabel);
   const safeLink = escapeHtml(payload.brokerLink || "");
   const cta = payload.locale === "es" ? "para abrir el broker" : "to open the broker";
-  const line = `» <a href="${safeLink}"><b><u>${safeLabel}</u></b></a> ${cta}`;
+  const line = `<tg-emoji emoji-id="5215480011322042129">➡️</tg-emoji> <a href="${safeLink}"><b><u>${safeLabel}</u></b></a> ${cta}`;
   const labelPattern = escapeRegExp(safeLabel);
   const linkLine = new RegExp(`^.*(?:${labelPattern}|\\{\\{brokerLabel\\}\\}|href=|broker).*$`, "gim");
   if (linkLine.test(html)) return html.replace(linkLine, line);
