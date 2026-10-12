@@ -87,7 +87,7 @@ export function renderSavedSignalTemplate(templateHtml: string, payload: SignalP
   };
 
   const rendered = templateHtml.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => replacements[key] || "");
-  return polishRenderedSignal(forceBrokerLine(forceBadgeLine(rendered, payload), payload));
+  return polishRenderedSignal(rendered);
 }
 
 export function renderCustom(locale: Locale, title: string, body: string, link: string, label: string) {
@@ -104,25 +104,6 @@ export function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function forceBrokerLine(html: string, payload: SignalPayload) {
-  const brokerLabel = payload.brokerLabel || (payload.locale === "es" ? "Haz clic aquí" : "Click here");
-  const safeLabel = escapeHtml(brokerLabel);
-  const safeLink = escapeHtml(payload.brokerLink || "");
-  const cta = payload.locale === "es" ? "para abrir el broker" : "to open the broker";
-  const line = `» <a href="${safeLink}">${safeLabel}</a> ${cta}`;
-  const labelPattern = escapeRegExp(safeLabel);
-  const linkLine = new RegExp(`^.*(?:${labelPattern}|\\{\\{brokerLabel\\}\\}|href=|broker).*$`, "gim");
-  if (linkLine.test(html)) return html.replace(linkLine, line);
-  return `${html.trimEnd()}\n\n${line}`;
-}
-
-function forceBadgeLine(html: string, payload: SignalPayload) {
-  const line = signalBadgeLine(payload.locale);
-  const badgeLine = /^.*(?:VIP SIGNAL(?!S)|SEÑAL VIP).*$/gim;
-  if (badgeLine.test(html)) return html.replace(badgeLine, line);
-  return html.replace(/^(<b>.*<\/b>)$/m, `$1\n${line}`);
-}
-
 function polishRenderedSignal(html: string) {
   return html
     .replace(/\bSELL(?:\s*(?:🔴|<tg-emoji\b[^>]*>🔴<\/tg-emoji>)){2,}/gi, "SELL 🔴")
@@ -131,6 +112,3 @@ function polishRenderedSignal(html: string) {
     .replace(/\bARRIBA(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "ARRIBA 🟢");
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
