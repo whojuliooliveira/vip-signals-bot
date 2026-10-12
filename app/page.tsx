@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock3, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, scheduledSendAtMsForOperation, signalDueTimeForRuntime, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, signalDueTimeForRuntime, signalSendWindowExpiresAtMs, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -84,7 +84,7 @@ export default function Home() {
       && signal.dateKey === dateKey
       && !signal.sentAt
       && !signal.error
-      && scheduledSendAtMsForOperation(signal.dateKey, signal.time) > now
+      && signalSendWindowExpiresAtMs(signal.dateKey, signal.time) >= now
     ));
   }, [signals, projectId, dateKey]);
 

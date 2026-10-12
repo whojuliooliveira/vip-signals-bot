@@ -41,7 +41,7 @@ const allowedSignalMinutes = new Set(["00", "05", "25", "30", "35", "55"]);
 const operationStart = "07:20";
 const operationEnd = "03:30";
 const signalLeadMinutes = 5;
-const signalGraceMinutes = 2;
+const signalGraceMinutes = 5;
 
 export function parseSignalInput(input: string): SignalParseResult {
   const signals: ParsedSignal[] = [];
@@ -177,6 +177,10 @@ export function isSignalDueNow(dateKey: string, time: string, now = new Date()) 
   const dueAt = scheduledSendAtMsForOperation(dateKey, time);
   const elapsed = now.getTime() - dueAt;
   return elapsed >= 0 && elapsed <= signalGraceMinutes * 60_000;
+}
+
+export function signalSendWindowExpiresAtMs(dateKey: string, time: string) {
+  return scheduledSendAtMsForOperation(dateKey, time) + signalGraceMinutes * 60_000;
 }
 
 export function sortSignalsByOperationDate<T extends { dateKey: string; time: string }>(signals: T[]) {
