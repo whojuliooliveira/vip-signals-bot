@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectConfig } from "../../../lib/projects";
-import { signalDueDateKeyForRuntime, signalDueTimeForRuntime } from "../../../lib/signals";
+import { isSignalDueNow } from "../../../lib/signals";
 import { escapeHtml, renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
 import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveStore, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
@@ -96,8 +96,7 @@ async function runSchedule(request: NextRequest) {
 
   const dueSignals = store.signals.filter((signal) => (
     !signal.sentAt
-    && signalDueDateKeyForRuntime(signal.dateKey, signal.time) === dateKey
-    && signalDueTimeForRuntime(signal.dateKey, signal.time) === time
+    && isSignalDueNow(signal.dateKey, signal.time, now)
   ));
   for (const signal of dueSignals) {
     const project = await getProjectConfig(signal.projectId);
