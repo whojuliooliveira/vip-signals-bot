@@ -59,6 +59,7 @@ type SendLog = {
 };
 
 const today = new Date().toISOString().slice(0, 10);
+const panelVersion = "diagnostico-59efaf4";
 const dayLabels: Record<DayMode, string> = { weekday: "Seg-Sex", saturday: "Sábado", sunday: "Domingo" };
 const captureLabels: Record<TemplateKind, string> = {
   signal_up: "Sinal CALL / BUY",
@@ -291,6 +292,7 @@ export default function Home() {
           <div>
             <h1>{tab === "lista" ? "Lista do dia" : "Configurações"}</h1>
             <p>{tab === "lista" ? "Escolha o projeto, cole a lista, valide e suba a fila." : "Bots, modelos e horários automáticos por projeto."}</p>
+            <strong className="version-badge">Painel {panelVersion}</strong>
           </div>
         </header>
 
@@ -315,7 +317,7 @@ export default function Home() {
               </div>
             </div>
             <div className="panel">
-              <div className="preview-head"><Clock3 size={18} /> Próximos envios</div>
+              <div className="preview-head"><Clock3 size={18} /> Próximos envios · diagnóstico ativo</div>
               <button className="secondary-button run-now" disabled={busy} onClick={runSchedulerNow}>Checar envios agora</button>
               <div className="queue-list">
                 {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signalDueTimeForRuntime(signal.dateKey, signal.time)}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"} · sinal {signal.time}</span><em>agendado</em></div>)}

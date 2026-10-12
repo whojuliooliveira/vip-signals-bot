@@ -168,6 +168,7 @@ pre { margin: 0; white-space: pre-wrap; border: 1px solid var(--border); border-
 .content-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .content-title h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 600; }
 .content-title p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.version-badge { display: inline-flex; width: fit-content; margin-top: 8px; border: 1px solid rgba(74,222,128,.28); border-radius: 6px; background: rgba(74,222,128,.08); color: var(--green); padding: 5px 8px; font-size: 12px; font-weight: 700; }
 .lean-app { min-height: 100dvh; width: min(1500px, calc(100vw - 32px)); margin: 0 auto; padding: 18px 0 34px; }
 .lean-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; margin-bottom: 14px; }
 .save-state { min-width: 82px; color: var(--muted); font-size: 12px; text-align: left; }
