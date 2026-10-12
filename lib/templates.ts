@@ -82,7 +82,7 @@ export function renderSavedSignalTemplate(templateHtml: string, payload: SignalP
   };
 
   const rendered = templateHtml.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => replacements[key] || "");
-  return polishRenderedSignal(forceBrokerLabelBold(rendered, payload.brokerLabel));
+  return polishRenderedSignal(forceBrokerLine(rendered, payload));
 }
 
 export function renderCustom(locale: Locale, title: string, body: string, link: string, label: string) {
@@ -99,14 +99,15 @@ export function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function forceBrokerLabelBold(html: string, brokerLabel: string) {
-  const safeLabel = escapeHtml(brokerLabel || "Click here");
-  let output = html.replace(
-    new RegExp(`(<a\\b[^>]*>)(?:<b>)?(?:<u>)?${escapeRegExp(safeLabel)}(?:<\\/u>)?(?:<\\/b>)?(<\\/a>)`, "gi"),
-    `<b><u>$1${safeLabel}$2</u></b>`,
-  );
-  output = output.replace(new RegExp(`(<b><u>)(<a\\b[^>]*>)${escapeRegExp(safeLabel)}(<\\/a>)(<\\/u><\\/b>)`, "gi"), `$1$2${safeLabel}$3$4`);
-  return output;
+function forceBrokerLine(html: string, payload: SignalPayload) {
+  const safeLabel = escapeHtml(payload.brokerLabel || "Click here");
+  const safeLink = escapeHtml(payload.brokerLink || "");
+  const cta = payload.locale === "es" ? "para abrir el broker" : "to open the broker";
+  const line = `» <a href="${safeLink}"><b><u>${safeLabel}</u></b></a> ${cta}`;
+  const labelPattern = escapeRegExp(safeLabel);
+  const linkLine = new RegExp(`^.*(?:${labelPattern}|\\{\\{brokerLabel\\}\\}|href=|broker).*$`, "gim");
+  if (linkLine.test(html)) return html.replace(linkLine, line);
+  return `${html.trimEnd()}\n\n${line}`;
 }
 
 function polishRenderedSignal(html: string) {
@@ -114,8 +115,7 @@ function polishRenderedSignal(html: string) {
     .replace(/\bSELL(?:\s*(?:🔴|<tg-emoji\b[^>]*>🔴<\/tg-emoji>)){2,}/gi, "SELL 🔴")
     .replace(/\bBUY(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "BUY 🟢")
     .replace(/\bABAJO(?:\s*(?:🔴|<tg-emoji\b[^>]*>🔴<\/tg-emoji>)){2,}/gi, "ABAJO 🔴")
-    .replace(/\bARRIBA(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "ARRIBA 🟢")
-    .replace(/(?:➡️|➡|🔜)\s*(<b><u><a\b)/g, "» $1");
+    .replace(/\bARRIBA(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "ARRIBA 🟢");
 }
 
 function escapeRegExp(value: string) {
