@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock3, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, scheduledAtMsForOperation, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -77,7 +77,16 @@ export default function Home() {
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
-  const selectedQueue = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey), [signals, projectId, dateKey]);
+  const selectedQueue = useMemo(() => {
+    const now = Date.now();
+    return signals.filter((signal) => (
+      signal.projectId === projectId
+      && signal.dateKey === dateKey
+      && !signal.sentAt
+      && !signal.error
+      && scheduledAtMsForOperation(signal.dateKey, signal.time) > now
+    ));
+  }, [signals, projectId, dateKey]);
 
   async function loadConfig(silent = false) {
     try {
@@ -262,17 +271,17 @@ export default function Home() {
 
           <aside className="side-stack">
             <div className="panel">
-              <div className="preview-head"><CheckCircle2 size={18} /> Validação</div>
-              <div className="validation-summary"><strong>{parsed.signals.length}</strong><span>sinais válidos</span></div>
+              <div className="preview-head"><CheckCircle2 size={18} /> Prévia da lista colada</div>
+              <div className="validation-summary"><strong>{parsed.signals.length}</strong><span>sinais válidos no texto</span></div>
               {parsed.errors.length > 0 && <ErrorList errors={parsed.errors} />}
               <div className="detected-list compact-detected">
                 {parsed.signals.slice(0, 80).map((signal, index) => <div className="detected-item" key={`${signal.time}-${signal.pair}-${index}`}><b>{signal.time}</b><span>{signal.pair}</span><em>{signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</em><small>{signal.market}</small></div>)}
               </div>
             </div>
             <div className="panel">
-              <div className="preview-head"><Clock3 size={18} /> Fila</div>
+              <div className="preview-head"><Clock3 size={18} /> Próximos envios</div>
               <div className="queue-list">
-                {selectedQueue.length === 0 ? <p className="muted">Nenhum sinal para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signal.time}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"}</span><em className={signal.error ? "bad-text" : signal.sentAt ? "ok-text" : ""}>{signal.error ? "falhou" : signal.sentAt ? "enviado" : "agendado"}</em></div>)}
+                {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signal.time}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"}</span><em>agendado</em></div>)}
               </div>
             </div>
           </aside>
