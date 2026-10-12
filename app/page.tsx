@@ -1,8 +1,8 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock3, ListChecks, Radio, Send, Settings } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, signalDueTimeForRuntime, signalSendWindowExpiresAtMs, type ParsedSignal, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, type ParsedSignal, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -46,20 +46,7 @@ type ScheduledSignal = {
   error?: string;
 };
 
-type SendLog = {
-  id: string;
-  at: string;
-  source: "manual" | "schedule";
-  projectId: string;
-  projectName?: string;
-  kind: string;
-  label: string;
-  status: "sent" | "failed";
-  error?: string;
-};
-
 const today = new Date().toISOString().slice(0, 10);
-const panelVersion = "diagnostico-59efaf4";
 const dayLabels: Record<DayMode, string> = { weekday: "Seg-Sex", saturday: "Sábado", sunday: "Domingo" };
 const captureLabels: Record<TemplateKind, string> = {
   signal_up: "Sinal CALL / BUY",
@@ -76,7 +63,6 @@ export default function Home() {
   const [projects, setProjects] = useState<ProjectSettings[]>([]);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [signals, setSignals] = useState<ScheduledSignal[]>([]);
-  const [logs, setLogs] = useState<SendLog[]>([]);
   const [projectId, setProjectId] = useState("expert_b");
   const [dateKey, setDateKey] = useState(today);
   const [rawText, setRawText] = useState("");
@@ -93,16 +79,6 @@ export default function Home() {
   const selectedProject = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
   const fullParsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
-  const selectedQueue = useMemo(() => {
-    const now = Date.now();
-    return signals.filter((signal) => (
-      signal.projectId === projectId
-      && signal.dateKey === dateKey
-      && !signal.sentAt
-      && !signal.error
-      && signalSendWindowExpiresAtMs(signal.dateKey, signal.time) >= now
-    ));
-  }, [signals, projectId, dateKey]);
 
   async function loadConfig(silent = false) {
     try {
@@ -112,7 +88,6 @@ export default function Home() {
       setProjects(result.projects || []);
       setMessages(result.messages || []);
       setSignals(result.signals || []);
-      setLogs(result.logs || []);
       if (!projectId && result.projects?.[0]?.id) setProjectId(result.projects[0].id);
       if (!silent) setStatus("");
       didLoad.current = true;
@@ -266,12 +241,6 @@ export default function Home() {
     }
   }
 
-  function clearSavedSecret() {
-    localStorage.removeItem("vipSignalsAdminSecret");
-    setAdminSecret("");
-    setStatus("Senha salva removida deste navegador.");
-  }
-
   async function startCapture() {
     setBusy(true);
     setStatus("");
@@ -287,28 +256,6 @@ export default function Home() {
       setStatus(result.instruction);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Erro desconhecido");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function runSchedulerNow() {
-    const secret = window.prompt("Senha do agendador (CRON_SECRET ou ADMIN_PASSWORD):");
-    if (!secret) return;
-    setBusy(true);
-    setStatus("Checando envios agora...");
-    try {
-      const response = await fetch("/api/run-schedule", {
-        method: "POST",
-        headers: { authorization: `Bearer ${secret}` },
-      });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha ao rodar agendador");
-      const errors = result.results?.filter((item: { error?: string }) => item.error) || [];
-      setStatus(`Agendador rodou ${result.dateKey} ${result.time}: ${result.due} envio(s) vencendo.${errors.length ? ` Erros: ${errors.map((item: { error: string }) => item.error).join(" | ")}` : ""}`);
-      await loadConfig(true);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Erro ao rodar agendador");
     } finally {
       setBusy(false);
     }
@@ -347,8 +294,7 @@ export default function Home() {
         <header className="content-title">
           <div>
             <h1>{tab === "lista" ? "Lista do dia" : "Configurações"}</h1>
-            <p>{tab === "lista" ? "Escolha o projeto, cole a lista, valide e suba a fila." : "Bots, modelos e horários automáticos por projeto."}</p>
-            <strong className="version-badge">Painel {panelVersion}</strong>
+            <p>{tab === "lista" ? "Cole a lista, confira os sinais e envie quando quiser." : "Bots, modelos e horários automáticos por projeto."}</p>
           </div>
         </header>
 
@@ -359,8 +305,8 @@ export default function Home() {
               <div className="field"><label>Projeto</label><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.language === "en" ? "Inglês" : "Espanhol"} · {project.name}</option>)}</select></div>
               <div className="field"><label>Data</label><input type="date" value={dateKey} onChange={(event) => setDateKey(event.target.value)} /></div>
             </div>
-            <textarea className="bulk-textarea clean-textarea" value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder={"Cole a lista completa aqui...\nM5;AEDCNY-OTC;08:00;CALL\nM5;AUDCAD-OTC;08:15;PUT"} />
-            <button className="primary-button submit-list" disabled={busy || parsed.signals.length === 0 || parsed.errors.length > 0} onClick={() => uploadList(false)}><Send size={16} /> Subir lista</button>
+            <textarea className="bulk-textarea clean-textarea" value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Cole a lista completa aqui..." />
+            <button className="primary-button submit-list" disabled={busy || parsed.signals.length === 0 || parsed.errors.length > 0} onClick={() => uploadList(false)}><Send size={16} /> Salvar fila automática</button>
           </div>
 
           <aside className="side-stack">
@@ -368,30 +314,14 @@ export default function Home() {
               <div className="preview-head"><CheckCircle2 size={18} /> Lista completa lida</div>
               <div className="validation-summary"><strong>{fullParsed.signals.length}</strong><span>sinais reconhecidos</span></div>
               {fullParsed.errors.length > 0 && <ErrorList errors={fullParsed.errors} />}
-              <div className="secret-row">
-                <span>{adminSecret ? "Senha salva neste navegador" : "Envio manual pede a senha só uma vez"}</span>
-                {adminSecret && <button className="tiny-button" onClick={clearSavedSecret}>trocar</button>}
-              </div>
               <div className="detected-list full-detected">
+                {fullParsed.signals.length === 0 && <p className="muted">Cole a lista no campo da esquerda para aparecer aqui.</p>}
                 {fullParsed.signals.slice(0, 160).map((signal, index) => <div className={`signal-row ${signal.validationError ? "outside" : "inside"}`} key={`${signal.time}-${signal.pair}-${index}`}>
                   <b>{signal.time}</b>
                   <span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</span>
                   <em>{signal.validationError ? "fora da regra" : "entra na fila"}</em>
                   <button disabled={busy} onClick={() => sendSignalNow(signal)}>Enviar agora</button>
                 </div>)}
-              </div>
-            </div>
-            <div className="panel">
-              <div className="preview-head"><Clock3 size={18} /> Próximos envios · diagnóstico ativo</div>
-              <button className="secondary-button run-now" disabled={busy} onClick={runSchedulerNow}>Checar envios agora</button>
-              <div className="queue-list">
-                {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signalDueTimeForRuntime(signal.dateKey, signal.time)}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"} · sinal {signal.time}</span><em>agendado</em></div>)}
-              </div>
-            </div>
-            <div className="panel">
-              <div className="preview-head"><AlertTriangle size={18} /> Últimos envios</div>
-              <div className="log-list">
-                {logs.length === 0 ? <p className="muted">Sem logs ainda.</p> : logs.slice(0, 8).map((log) => <div className={`log-item ${log.status}`} key={log.id}><b>{formatLogTime(log.at)}</b><span>{log.label}</span><em>{log.status === "sent" ? "enviado" : log.error || "erro"}</em></div>)}
               </div>
             </div>
           </aside>
@@ -449,12 +379,4 @@ function TemplateStatus({ project }: { project: ProjectSettings }) {
       {messageKinds.map((kind) => <span key={kind}>{captureLabels[kind]}: {project.messageTemplates?.[kind] ? "salvo" : "faltando"}</span>)}
     </div>
   );
-}
-
-function formatLogTime(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
