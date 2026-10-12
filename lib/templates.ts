@@ -32,6 +32,11 @@ export function signalBadge(locale: Locale) {
   return locale === "es" ? "▌◎ SEÑAL VIP ◎  ❞" : "▌◎ VIP SIGNAL ◎  ❞";
 }
 
+function signalBadgeLine(locale: Locale) {
+  const label = locale === "es" ? "SEÑAL VIP" : "VIP SIGNAL";
+  return `<blockquote><tg-emoji emoji-id="5215522595922779944">🟢</tg-emoji> <b><i>${label}</i></b> <tg-emoji emoji-id="5215522595922779944">🟢</tg-emoji></blockquote>`;
+}
+
 export function renderSignal(payload: SignalPayload) {
   if (payload.template?.html) return renderSavedSignalTemplate(payload.template.html, payload);
 
@@ -42,7 +47,7 @@ export function renderSignal(payload: SignalPayload) {
   const lines = isEs
     ? [
         `<b>${escapeHtml(payload.title)}</b>`,
-        `<b><i>${signalBadge("es")}</i></b>`,
+        signalBadgeLine("es"),
         "",
         "• Huso Horario: UTC-3",
         "",
@@ -54,7 +59,7 @@ export function renderSignal(payload: SignalPayload) {
       ]
     : [
         `<b>${escapeHtml(payload.title)}</b>`,
-        `<b><i>${signalBadge("en")}</i></b>`,
+        signalBadgeLine("en"),
         "",
         "• Timezone: UTC-3",
         "",
@@ -82,7 +87,7 @@ export function renderSavedSignalTemplate(templateHtml: string, payload: SignalP
   };
 
   const rendered = templateHtml.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => replacements[key] || "");
-  return polishRenderedSignal(forceBrokerLine(rendered, payload));
+  return polishRenderedSignal(forceBrokerLine(forceBadgeLine(rendered, payload), payload));
 }
 
 export function renderCustom(locale: Locale, title: string, body: string, link: string, label: string) {
@@ -101,14 +106,21 @@ export function escapeHtml(value: string) {
 
 function forceBrokerLine(html: string, payload: SignalPayload) {
   const brokerLabel = payload.brokerLabel || (payload.locale === "es" ? "Haz clic aquí" : "Click here");
-  const safeLabel = escapeHtml(payload.locale === "en" && brokerLabel.toLowerCase() === "click here" ? "Click Here" : brokerLabel);
+  const safeLabel = escapeHtml(brokerLabel);
   const safeLink = escapeHtml(payload.brokerLink || "");
   const cta = payload.locale === "es" ? "para abrir el broker" : "to open the broker";
-  const line = `<tg-emoji emoji-id="5215480011322042129">➡️</tg-emoji> <b><u><a href="${safeLink}">${safeLabel}</a></u></b> ${cta}`;
+  const line = `» <a href="${safeLink}">${safeLabel}</a> ${cta}`;
   const labelPattern = escapeRegExp(safeLabel);
   const linkLine = new RegExp(`^.*(?:${labelPattern}|\\{\\{brokerLabel\\}\\}|href=|broker).*$`, "gim");
   if (linkLine.test(html)) return html.replace(linkLine, line);
   return `${html.trimEnd()}\n\n${line}`;
+}
+
+function forceBadgeLine(html: string, payload: SignalPayload) {
+  const line = signalBadgeLine(payload.locale);
+  const badgeLine = /^.*(?:VIP SIGNAL(?!S)|SEÑAL VIP).*$/gim;
+  if (badgeLine.test(html)) return html.replace(badgeLine, line);
+  return html.replace(/^(<b>.*<\/b>)$/m, `$1\n${line}`);
 }
 
 function polishRenderedSignal(html: string) {
