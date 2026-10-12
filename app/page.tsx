@@ -46,6 +46,18 @@ type ScheduledSignal = {
   error?: string;
 };
 
+type SendLog = {
+  id: string;
+  at: string;
+  source: "manual" | "schedule";
+  projectId: string;
+  projectName?: string;
+  kind: string;
+  label: string;
+  status: "sent" | "failed";
+  error?: string;
+};
+
 const today = new Date().toISOString().slice(0, 10);
 const dayLabels: Record<DayMode, string> = { weekday: "Seg-Sex", saturday: "Sábado", sunday: "Domingo" };
 const captureLabels: Record<TemplateKind, string> = {
@@ -63,6 +75,7 @@ export default function Home() {
   const [projects, setProjects] = useState<ProjectSettings[]>([]);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [signals, setSignals] = useState<ScheduledSignal[]>([]);
+  const [logs, setLogs] = useState<SendLog[]>([]);
   const [projectId, setProjectId] = useState("expert_b");
   const [dateKey, setDateKey] = useState(today);
   const [rawText, setRawText] = useState("");
@@ -96,6 +109,7 @@ export default function Home() {
       setProjects(result.projects || []);
       setMessages(result.messages || []);
       setSignals(result.signals || []);
+      setLogs(result.logs || []);
       if (!projectId && result.projects?.[0]?.id) setProjectId(result.projects[0].id);
       if (!silent) setStatus("");
       didLoad.current = true;
@@ -221,6 +235,28 @@ export default function Home() {
     }
   }
 
+  async function runSchedulerNow() {
+    const secret = window.prompt("Senha do agendador (CRON_SECRET ou ADMIN_PASSWORD):");
+    if (!secret) return;
+    setBusy(true);
+    setStatus("Checando envios agora...");
+    try {
+      const response = await fetch("/api/run-schedule", {
+        method: "POST",
+        headers: { authorization: `Bearer ${secret}` },
+      });
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error || "Falha ao rodar agendador");
+      const errors = result.results?.filter((item: { error?: string }) => item.error) || [];
+      setStatus(`Agendador rodou ${result.dateKey} ${result.time}: ${result.due} envio(s) vencendo.${errors.length ? ` Erros: ${errors.map((item: { error: string }) => item.error).join(" | ")}` : ""}`);
+      await loadConfig(true);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Erro ao rodar agendador");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function patchProject(id: string, patch: Partial<ProjectSettings>) {
     setProjects((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
@@ -280,8 +316,15 @@ export default function Home() {
             </div>
             <div className="panel">
               <div className="preview-head"><Clock3 size={18} /> Próximos envios</div>
+              <button className="secondary-button run-now" disabled={busy} onClick={runSchedulerNow}>Checar envios agora</button>
               <div className="queue-list">
                 {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signalDueTimeForRuntime(signal.dateKey, signal.time)}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"} · sinal {signal.time}</span><em>agendado</em></div>)}
+              </div>
+            </div>
+            <div className="panel">
+              <div className="preview-head"><AlertTriangle size={18} /> Últimos envios</div>
+              <div className="log-list">
+                {logs.length === 0 ? <p className="muted">Sem logs ainda.</p> : logs.slice(0, 8).map((log) => <div className={`log-item ${log.status}`} key={log.id}><b>{formatLogTime(log.at)}</b><span>{log.label}</span><em>{log.status === "sent" ? "enviado" : log.error || "erro"}</em></div>)}
               </div>
             </div>
           </aside>
@@ -339,4 +382,12 @@ function TemplateStatus({ project }: { project: ProjectSettings }) {
       {messageKinds.map((kind) => <span key={kind}>{captureLabels[kind]}: {project.messageTemplates?.[kind] ? "salvo" : "faltando"}</span>)}
     </div>
   );
+}
+
+function formatLogTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
