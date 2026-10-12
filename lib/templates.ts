@@ -1,4 +1,5 @@
 import type { CapturedTemplate } from "./store";
+import type { TelegramEntity } from "./telegram";
 
 export type Locale = "es" | "en";
 export type Direction = "UP" | "DOWN";
@@ -16,6 +17,11 @@ export type SignalPayload = {
   brokerLabel: string;
   includeInlineButton: boolean;
   template?: CapturedTemplate;
+};
+
+export type RenderedTelegramMessage = {
+  text: string;
+  entities?: TelegramEntity[];
 };
 
 export function directionLabel(locale: Locale, direction: Direction) {
@@ -37,8 +43,8 @@ function signalBadgeLine(locale: Locale) {
   return `<blockquote>◎ <b><i>${label}</i></b> ◎</blockquote>`;
 }
 
-export function renderSignal(payload: SignalPayload) {
-  if (payload.template?.html) return renderSavedSignalTemplate(payload.template.html, payload);
+export function renderSignal(payload: SignalPayload): RenderedTelegramMessage {
+  if (payload.template) return renderSavedSignalTemplate(payload.template, payload);
 
   const isEs = payload.locale === "es";
   const pair = payload.pair.trim().toUpperCase();
@@ -70,30 +76,34 @@ export function renderSignal(payload: SignalPayload) {
         `›› <a href="${escapeHtml(payload.brokerLink)}"><b>${escapeHtml(payload.brokerLabel)}</b></a> to open the broker`,
       ];
 
-  return lines.join("\n");
+  return { text: lines.join("\n") };
 }
 
-export function renderSavedSignalTemplate(templateHtml: string, payload: SignalPayload) {
+export function renderSavedSignalTemplate(template: CapturedTemplate, payload: SignalPayload): RenderedTelegramMessage {
   const replacements: Record<string, string> = {
-    title: escapeHtml(payload.title),
-    pair: escapeHtml(payload.pair.trim().toUpperCase()),
-    market: escapeHtml(payload.market.trim().toUpperCase() || "OTC"),
-    direction: escapeHtml(directionText(payload.locale, payload.direction)),
-    time: escapeHtml(payload.time),
+    title: payload.title,
+    pair: payload.pair.trim().toUpperCase(),
+    market: payload.market.trim().toUpperCase() || "OTC",
+    direction: directionText(payload.locale, payload.direction),
+    time: payload.time,
     expiry: String(payload.expiryMinutes),
     reentries: String(payload.reentries),
-    brokerLink: escapeHtml(payload.brokerLink),
-    brokerLabel: escapeHtml(payload.brokerLabel),
+    brokerLink: payload.brokerLink,
+    brokerLabel: payload.brokerLabel,
   };
 
-  const rendered = templateHtml.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => replacements[key] || "");
-  return polishRenderedSignal(rendered);
+  if (template.text && template.entities) {
+    return renderNativeTemplate(template.text, template.entities, replacements);
+  }
+
+  const rendered = template.html.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => escapeHtml(replacements[key] || ""));
+  return { text: polishRenderedSignal(rendered) };
 }
 
-export function renderCustom(locale: Locale, title: string, body: string, link: string, label: string) {
+export function renderCustom(locale: Locale, title: string, body: string, link: string, label: string): RenderedTelegramMessage {
   const safeBody = escapeHtml(body).replace(/\n/g, "\n");
   const cta = locale === "es" ? "para abrir el Broker" : "to open the Broker";
-  return [`<b>${escapeHtml(title)}</b>`, safeBody, "", `›› <a href="${escapeHtml(link)}"><b>${escapeHtml(label)}</b></a> ${cta}`].join("\n");
+  return { text: [`<b>${escapeHtml(title)}</b>`, safeBody, "", `›› <a href="${escapeHtml(link)}"><b>${escapeHtml(label)}</b></a> ${cta}`].join("\n") };
 }
 
 export function escapeHtml(value: string) {
@@ -110,5 +120,52 @@ function polishRenderedSignal(html: string) {
     .replace(/\bBUY(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "BUY 🟢")
     .replace(/\bABAJO(?:\s*(?:🔴|<tg-emoji\b[^>]*>🔴<\/tg-emoji>)){2,}/gi, "ABAJO 🔴")
     .replace(/\bARRIBA(?:\s*(?:🟢|<tg-emoji\b[^>]*>🟢<\/tg-emoji>)){2,}/gi, "ARRIBA 🟢");
+}
+
+function renderNativeTemplate(templateText: string, templateEntities: TelegramEntity[], replacements: Record<string, string>): RenderedTelegramMessage {
+  let text = templateText;
+  let entities = cloneEntities(templateEntities);
+  for (const [key, value] of Object.entries(replacements)) {
+    const rendered = replaceToken(text, entities, `{{${key}}}`, value);
+    text = rendered.text;
+    entities = rendered.entities;
+  }
+  return { text: polishPlainSignal(text), entities };
+}
+
+function replaceToken(text: string, entities: TelegramEntity[], token: string, value: string) {
+  let nextText = text;
+  let nextEntities = entities;
+  let index = nextText.indexOf(token);
+  while (index !== -1) {
+    nextText = `${nextText.slice(0, index)}${value}${nextText.slice(index + token.length)}`;
+    nextEntities = shiftEntities(nextEntities, index, token.length, value.length);
+    index = nextText.indexOf(token, index + value.length);
+  }
+  return { text: nextText, entities: nextEntities };
+}
+
+function shiftEntities(entities: TelegramEntity[], start: number, oldLength: number, newLength: number) {
+  const delta = newLength - oldLength;
+  const end = start + oldLength;
+  return entities.map((entity) => {
+    const entityEnd = entity.offset + entity.length;
+    if (entity.offset >= end) return { ...entity, offset: entity.offset + delta };
+    if (entity.offset <= start && entityEnd >= end) return { ...entity, length: entity.length + delta };
+    if (entity.offset < end && entityEnd > start) return { ...entity, length: Math.max(0, entity.length + delta) };
+    return entity;
+  });
+}
+
+function polishPlainSignal(text: string) {
+  return text
+    .replace(/\bSELL(?:\s*🔴){2,}/gi, "SELL 🔴")
+    .replace(/\bBUY(?:\s*🟢){2,}/gi, "BUY 🟢")
+    .replace(/\bABAJO(?:\s*🔴){2,}/gi, "ABAJO 🔴")
+    .replace(/\bARRIBA(?:\s*🟢){2,}/gi, "ARRIBA 🟢");
+}
+
+function cloneEntities(entities: TelegramEntity[]) {
+  return entities.map((entity) => ({ ...entity }));
 }
 

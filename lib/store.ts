@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { hasSupabase, supabaseDelete, supabaseSelect, supabaseUpsert } from "./supabase";
+import type { TelegramEntity } from "./telegram";
 
 export type DayMode = "weekday" | "saturday" | "sunday";
 export type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -22,6 +23,8 @@ export type CapturedTemplate = {
   id: string;
   kind: TemplateKind;
   html: string;
+  text?: string;
+  entities?: TelegramEntity[];
   media?: CapturedMedia;
   buttons?: CapturedButton[][];
   limitations?: string[];

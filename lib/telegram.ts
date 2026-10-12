@@ -4,6 +4,7 @@ export type SendTelegramMessage = {
   chatId: string;
   chatTitle?: string;
   text: string;
+  entities?: TelegramEntity[];
   buttonText?: string;
   buttonUrl?: string;
   media?: {
@@ -57,8 +58,9 @@ async function sendTelegramBotApiMessage(token: string, payload: SendTelegramMes
       chat_id: payload.chatId,
       [mediaFieldByType[payload.media.type]]: payload.media.fileId,
       caption: payload.text,
-      parse_mode: "HTML",
     };
+    if (payload.entities?.length) body.caption_entities = payload.entities;
+    else body.parse_mode = "HTML";
     if (replyMarkup) body.reply_markup = replyMarkup;
     const response = await fetch(`https://api.telegram.org/bot${token}/${methodByType[payload.media.type]}`, {
       method: "POST",
@@ -73,9 +75,10 @@ async function sendTelegramBotApiMessage(token: string, payload: SendTelegramMes
   const body: Record<string, unknown> = {
     chat_id: payload.chatId,
     text: payload.text,
-    parse_mode: "HTML",
     disable_web_page_preview: true,
   };
+  if (payload.entities?.length) body.entities = payload.entities;
+  else body.parse_mode = "HTML";
 
   if (replyMarkup) body.reply_markup = replyMarkup;
 

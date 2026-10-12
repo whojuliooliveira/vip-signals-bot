@@ -15,6 +15,7 @@ export function isTelegramUserSenderConfigured() {
 export function canUseTelegramUserSender(payload: SendTelegramMessage) {
   if (!isTelegramUserSenderConfigured()) return false;
   if (payload.media) return false;
+  if (payload.entities?.length) return false;
   return true;
 }
 

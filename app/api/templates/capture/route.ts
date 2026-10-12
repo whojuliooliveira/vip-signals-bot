@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectConfig } from "../../../../lib/projects";
 import { loadStore, saveStore, uid, type CapturedTemplate, type TemplateKind } from "../../../../lib/store";
-import { getTelegramUpdates, telegramMessageToHtml, updateMessage, type TelegramCapturedMessage } from "../../../../lib/telegram";
+import { getTelegramUpdates, telegramMessageToHtml, updateMessage, type TelegramCapturedMessage, type TelegramEntity } from "../../../../lib/telegram";
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 
@@ -118,10 +118,13 @@ function capturedTemplateFromMessage(kind: TemplateKind, message: TelegramCaptur
           : undefined;
 
   const html = normalizeTemplate(telegramMessageToHtml(message), projectName, brokerLink);
+  const native = normalizeNativeTemplate(message, projectName, brokerLink);
   return {
     id: uid("tpl"),
     kind,
     html,
+    text: native.text,
+    entities: native.entities,
     media,
     buttons,
     limitations,
@@ -143,6 +146,65 @@ function normalizeTemplate(html: string, projectName: string, brokerLink: string
   template = template.replace(/make\s+{{direction}}\s+to\s+2\s+Gale&apos;s/gi, "make up to {{reentries}} Gale&apos;s");
   template = template.replace(/make\s+{{direction}}\s+to\s+2\s+Gale's/gi, "make up to {{reentries}} Gale's");
   return template;
+}
+
+function normalizeNativeTemplate(message: TelegramCapturedMessage, projectName: string, brokerLink: string) {
+  let text = message.text || message.caption || "";
+  let entities = cloneEntities(message.text ? message.entities || [] : message.caption_entities || []);
+  ({ text, entities } = replaceNativeLiteral(text, entities, projectName, "{{title}}"));
+  if (brokerLink) ({ text, entities } = replaceNativeLiteral(text, entities, brokerLink, "{{brokerLink}}"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /\b[A-Z]{3}\/[A-Z]{3,}\b|\b[A-Z]{6,}(?=\s*(?:-?OTC|\())/g, "{{pair}}"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /\(\s*OTC\s*\)/gi, "({{market}})"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /\b([01]?\d|2[0-3]):[0-5]\d\b/, "{{time}}"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /\b(BUY|CALL|UP|ARRIBA|SELL|PUT|DOWN|ABAJO)\b/gi, "{{direction}}"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /make\s+\{\{direction\}\}\s+to\s+2\s+Gale's/gi, "make up to {{reentries}} Gale's"));
+  return { text, entities };
+}
+
+function replaceNativeLiteral(text: string, entities: TelegramEntity[], needle: string, replacement: string) {
+  if (!needle) return { text, entities };
+  let nextText = text;
+  let nextEntities = entities;
+  let index = nextText.indexOf(needle);
+  while (index !== -1) {
+    nextText = `${nextText.slice(0, index)}${replacement}${nextText.slice(index + needle.length)}`;
+    nextEntities = shiftEntities(nextEntities, index, needle.length, replacement.length);
+    index = nextText.indexOf(needle, index + replacement.length);
+  }
+  return { text: nextText, entities: nextEntities };
+}
+
+function replaceNativeRegex(text: string, entities: TelegramEntity[], pattern: RegExp, replacement: string) {
+  let nextText = text;
+  let nextEntities = entities;
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const regex = new RegExp(pattern.source, flags);
+  let match = regex.exec(nextText);
+  while (match) {
+    const index = match.index;
+    const value = match[0];
+    nextText = `${nextText.slice(0, index)}${replacement}${nextText.slice(index + value.length)}`;
+    nextEntities = shiftEntities(nextEntities, index, value.length, replacement.length);
+    regex.lastIndex = index + replacement.length;
+    match = regex.exec(nextText);
+  }
+  return { text: nextText, entities: nextEntities };
+}
+
+function shiftEntities(entities: TelegramEntity[], start: number, oldLength: number, newLength: number) {
+  const delta = newLength - oldLength;
+  const end = start + oldLength;
+  return entities.map((entity) => {
+    const entityEnd = entity.offset + entity.length;
+    if (entity.offset >= end) return { ...entity, offset: entity.offset + delta };
+    if (entity.offset <= start && entityEnd >= end) return { ...entity, length: entity.length + delta };
+    if (entity.offset < end && entityEnd > start) return { ...entity, length: Math.max(0, entity.length + delta) };
+    return entity;
+  });
+}
+
+function cloneEntities(entities: TelegramEntity[]) {
+  return entities.map((entity) => ({ ...entity }));
 }
 
 function replaceLiteral(value: string, needle: string, replacement: string) {

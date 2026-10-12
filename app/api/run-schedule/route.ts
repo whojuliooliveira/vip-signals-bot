@@ -47,13 +47,16 @@ async function runSchedule(request: NextRequest) {
 
       const body = message.textByLanguage[project.language] || message.textByLanguage.en || message.textByLanguage.es || "";
       const template = project.messageTemplates?.[message.kind];
-      const text = template?.html || renderSavedMessage(project.name, body);
+      const renderedMessage = template?.text
+        ? { text: template.text, entities: template.entities }
+        : { text: template?.html || renderSavedMessage(project.name, body) };
 
       try {
         const sent = await sendTelegramMessage(project.botToken, {
           chatId: project.chatId,
           chatTitle: project.name,
-          text,
+          text: renderedMessage.text,
+          entities: renderedMessage.entities,
           media: template?.media,
           buttons: template?.buttons,
           buttonText: message.includeInlineButton ? project.brokerLabel : undefined,
@@ -105,7 +108,7 @@ async function runSchedule(request: NextRequest) {
     if (!project) continue;
 
     try {
-      const text = renderSignal({
+      const message = renderSignal({
         locale: project.language,
         title: project.name,
         pair: signal.pair,
@@ -122,7 +125,8 @@ async function runSchedule(request: NextRequest) {
       const sent = await sendTelegramMessage(project.botToken, {
         chatId: project.chatId,
         chatTitle: project.name,
-        text,
+        text: message.text,
+        entities: message.entities,
         media: project.signalTemplates?.[signal.direction]?.media,
         buttons: project.signalTemplates?.[signal.direction]?.buttons,
       });
@@ -137,7 +141,7 @@ async function runSchedule(request: NextRequest) {
         messageId: sent?.message_id,
         kind: "signal",
         label: `${signal.pair} ${signal.direction}`,
-        text,
+        text: message.text,
         status: "sent",
       };
       store.logs = [log, ...store.logs].slice(0, 1000);

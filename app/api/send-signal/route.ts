@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       if (!project.botToken) throw new Error(`Missing bot token for ${project.name}`);
       if (!project.chatId) throw new Error(`Missing chat id for ${project.name}`);
 
-      const text = body.kind === "custom"
+      const message = body.kind === "custom"
         ? renderCustom(project.language, project.name, String(body.customText || ""), project.link, project.brokerLabel)
         : renderSignal({
             locale: project.language,
@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       const result = await sendTelegramMessage(project.botToken, {
         chatId: project.chatId,
         chatTitle: project.name,
-        text,
+        text: message.text,
+        entities: message.entities,
         media: body.kind === "custom" ? undefined : project.signalTemplates?.[String(body.direction || "DOWN") as Direction]?.media,
         buttons: body.kind === "custom" ? undefined : project.signalTemplates?.[String(body.direction || "DOWN") as Direction]?.buttons,
         buttonText: body.kind === "custom" && body.includeInlineButton ? project.brokerLabel : undefined,
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
         messageId: result?.message_id,
         kind: body.kind === "custom" ? "custom" : "signal",
         label: body.kind === "custom" ? "Manual custom" : `${String(body.pair || "").toUpperCase()} ${String(body.direction || "DOWN")}`,
-        text,
+        text: message.text,
         status: "sent",
       });
       results.push({ projectId: project.id, language: project.language, messageId: result?.message_id });
