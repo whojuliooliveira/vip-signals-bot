@@ -8,6 +8,7 @@ Use um unico servico para o ingles agora. O mesmo container sobe o painel e o wo
 - Dockerfile: `Dockerfile`
 - Porta: `3000`
 - Comando: deixe o padrao da imagem
+- Em `Ambiente`, deixe `Create env file` ligado para o container receber as variaveis tambem em runtime.
 
 ## Variaveis obrigatorias
 

@@ -1,4 +1,8 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+
+loadEnvFile(".env");
+loadEnvFile(".env.local");
 
 const port = process.env.PORT || "3000";
 const appUrl = (process.env.PUBLIC_APP_URL || process.env.APP_URL || `http://127.0.0.1:${port}`).replace(/\/$/, "");
@@ -6,7 +10,7 @@ const appUrl = (process.env.PUBLIC_APP_URL || process.env.APP_URL || `http://127
 process.env.PORT = port;
 process.env.PUBLIC_APP_URL = appUrl;
 
-function start(name, command, args) {
+function start(name, command, args, options = {}) {
   const child = spawn(command, args, {
     env: process.env,
     stdio: "inherit",
@@ -15,7 +19,13 @@ function start(name, command, args) {
 
   child.on("exit", (code, signal) => {
     console.error(`${name} finalizou`, { code, signal });
-    process.exit(code || 1);
+    if (options.fatal) {
+      process.exit(code || 1);
+      return;
+    }
+    const delayMs = Number(process.env.WORKER_RESTART_DELAY_MS || 15000);
+    console.error(`${name} reinicia em ${Math.round(delayMs / 1000)}s`);
+    setTimeout(() => start(name, command, args, options), delayMs);
   });
 
   return child;
@@ -24,10 +34,10 @@ function start(name, command, args) {
 console.log(`Painel ligado na porta ${port}`);
 console.log(`Worker chamando ${appUrl}/api/run-schedule`);
 
-const app = start("painel", "npm", ["run", "start"]);
+const app = start("painel", "npm", ["run", "start"], { fatal: true });
 
 setTimeout(() => {
-  start("worker", "npm", ["run", "worker"]);
+  start("worker", "npm", ["run", "worker"], { fatal: false });
 }, Number(process.env.WORKER_START_DELAY_MS || 8000));
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -35,4 +45,17 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     app.kill(signal);
     process.exit(0);
   });
+}
+
+function loadEnvFile(path) {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    const [, key, raw] = match;
+    if (process.env[key]) continue;
+    process.env[key] = raw.replace(/^"|"$/g, "");
+  }
 }
