@@ -34,7 +34,7 @@ export function signalBadge(locale: Locale) {
 
 function signalBadgeLine(locale: Locale) {
   const label = locale === "es" ? "SEÑAL VIP" : "VIP SIGNAL";
-  return `<blockquote><tg-emoji emoji-id="5215522595922779944">🟢</tg-emoji> <b><i>${label}</i></b> <tg-emoji emoji-id="5215522595922779944">🟢</tg-emoji></blockquote>`;
+  return `<blockquote>◎ <b><i>${label}</i></b> ◎</blockquote>`;
 }
 
 export function renderSignal(payload: SignalPayload) {
