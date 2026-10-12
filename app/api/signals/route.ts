@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSignalInput, signalSendWindowExpiresAtMs, sortSignalsByOperationDate } from "../../../lib/signals";
+import { parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
 import { deleteSignalsByIds, loadStore, localDateKey, saveStore, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   if (!selectedProjectId || selectedProjectId === "auto") return NextResponse.json({ ok: false, error: "Selecione inglês ou espanhol" }, { status: 400 });
 
   const dateKey = String(body.dateKey || localDateKey());
-  const parsedResult = parseSignalInput(String(body.rawText || ""));
+  const parsedResult = parseSignalInput(String(body.rawText || ""), { includeOutOfCriteria: true });
   if (parsedResult.errors.length) {
     return NextResponse.json({ ok: false, error: "Corrija as linhas inválidas antes de subir.", parsed: parsedResult.signals, errors: parsedResult.errors }, { status: 400 });
   }
@@ -37,15 +37,9 @@ export async function POST(request: NextRequest) {
 
   const existing = new Set(store.signals.map((signal) => `${signal.dateKey}:${signal.projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
   const created: ScheduledSignal[] = [];
-  const skippedPast = [];
-  const nowMs = Date.now();
 
   for (const signal of parsed) {
     const projectId = selectedProjectId;
-    if (signalSendWindowExpiresAtMs(dateKey, signal.time) < nowMs) {
-      skippedPast.push(signal);
-      continue;
-    }
     const key = `${dateKey}:${projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`;
     if (existing.has(key)) continue;
     created.push({
@@ -60,10 +54,12 @@ export async function POST(request: NextRequest) {
       reentries: Number(body.reentries || 2),
       sourceText: signal.sourceText,
       createdAt: new Date().toISOString(),
+      manualOnly: Boolean(signal.validationError),
+      validationError: signal.validationError,
     });
   }
 
   store.signals = sortSignalsByOperationDate([...store.signals, ...created]);
   await saveStore(store);
-  return NextResponse.json({ ok: true, parsed, errors: [], created, skippedPast, signals: store.signals });
+  return NextResponse.json({ ok: true, parsed, errors: [], created, skippedPast: [], signals: store.signals });
 }

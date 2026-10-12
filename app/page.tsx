@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, type ParsedSignal, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, validateSignalTime, type ParsedSignal, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -44,6 +44,8 @@ type ScheduledSignal = {
   time: string;
   sentAt?: string;
   error?: string;
+  manualOnly?: boolean;
+  validationError?: string;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -67,7 +69,6 @@ export default function Home() {
   const [dateKey, setDateKey] = useState(today);
   const [rawText, setRawText] = useState("");
   const [status, setStatus] = useState("");
-  const [adminSecret, setAdminSecret] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [busy, setBusy] = useState(false);
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
@@ -79,6 +80,17 @@ export default function Home() {
   const selectedProject = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
   const fullParsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
+  const savedSignalsForDate = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey), [signals, projectId, dateKey]);
+  const visibleSignals = fullParsed.signals.length
+    ? fullParsed.signals
+    : savedSignalsForDate.map((signal) => ({
+      pair: signal.pair,
+      market: signal.market,
+      direction: signal.direction,
+      time: signal.time,
+      sourceText: "",
+      validationError: signal.validationError || validateSignalTime(signal.time) || undefined,
+    }));
 
   async function loadConfig(silent = false) {
     try {
@@ -97,7 +109,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    setAdminSecret(localStorage.getItem("vipSignalsAdminSecret") || "");
     loadConfig();
     const timer = setInterval(() => loadConfig(true), 12000);
     return () => clearInterval(timer);
@@ -163,7 +174,7 @@ export default function Home() {
   }
 
   async function uploadList(confirmReplace = false) {
-    if (parsed.errors.length) {
+    if (fullParsed.errors.length) {
       setStatus("Corrija as linhas inválidas antes de subir.");
       return;
     }
@@ -195,14 +206,6 @@ export default function Home() {
   }
 
   async function sendSignalNow(signal: ParsedSignal) {
-    let secret = adminSecret;
-    if (!secret) {
-      secret = window.prompt("Senha do painel para salvar neste navegador:") || "";
-      if (!secret) return;
-      localStorage.setItem("vipSignalsAdminSecret", secret);
-      setAdminSecret(secret);
-    }
-
     setBusy(true);
     setStatus(`Enviando ${signal.pair} ${signal.time} agora...`);
     try {
@@ -210,7 +213,6 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-password": secret,
         },
         body: JSON.stringify({
           kind: "signal",
@@ -225,13 +227,7 @@ export default function Home() {
         }),
       });
       const result = await response.json();
-      if (!result.ok) {
-        if (response.status === 401) {
-          localStorage.removeItem("vipSignalsAdminSecret");
-          setAdminSecret("");
-        }
-        throw new Error(result.error || "Falha ao enviar");
-      }
+      if (!result.ok) throw new Error(result.error || "Falha ao enviar");
       setStatus(`${signal.pair} ${signal.time} enviado agora.`);
       await loadConfig(true);
     } catch (error) {
@@ -306,17 +302,17 @@ export default function Home() {
               <div className="field"><label>Data</label><input type="date" value={dateKey} onChange={(event) => setDateKey(event.target.value)} /></div>
             </div>
             <textarea className="bulk-textarea clean-textarea" value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Cole a lista completa aqui..." />
-            <button className="primary-button submit-list" disabled={busy || parsed.signals.length === 0 || parsed.errors.length > 0} onClick={() => uploadList(false)}><Send size={16} /> Salvar fila automática</button>
+            <button className="primary-button submit-list" disabled={busy || fullParsed.signals.length === 0 || fullParsed.errors.length > 0} onClick={() => uploadList(false)}><Send size={16} /> Salvar lista da data</button>
           </div>
 
           <aside className="side-stack">
             <div className="panel">
               <div className="preview-head"><CheckCircle2 size={18} /> Lista completa lida</div>
-              <div className="validation-summary"><strong>{fullParsed.signals.length}</strong><span>sinais reconhecidos</span></div>
+              <div className="validation-summary"><strong>{visibleSignals.length}</strong><span>{fullParsed.signals.length ? "sinais reconhecidos" : "sinais salvos na data"}</span></div>
               {fullParsed.errors.length > 0 && <ErrorList errors={fullParsed.errors} />}
               <div className="detected-list full-detected">
-                {fullParsed.signals.length === 0 && <p className="muted">Cole a lista no campo da esquerda para aparecer aqui.</p>}
-                {fullParsed.signals.slice(0, 160).map((signal, index) => <div className={`signal-row ${signal.validationError ? "outside" : "inside"}`} key={`${signal.time}-${signal.pair}-${index}`}>
+                {visibleSignals.length === 0 && <p className="muted">Cole uma lista ou escolha uma data com sinais salvos.</p>}
+                {visibleSignals.slice(0, 200).map((signal, index) => <div className={`signal-row ${signal.validationError ? "outside" : "inside"}`} key={`${signal.time}-${signal.pair}-${index}`}>
                   <b>{signal.time}</b>
                   <span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</span>
                   <em>{signal.validationError ? "fora da regra" : "entra na fila"}</em>

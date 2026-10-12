@@ -7,11 +7,6 @@ import { sendTelegramMessage } from "../../../lib/telegram";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const password = request.headers.get("x-admin-password") || body.password;
-    if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-
     const projectIds = Array.isArray(body.projects) ? body.projects : [body.projectId].filter(Boolean);
     if (!projectIds.length) throw new Error("Select at least one project");
 

@@ -100,6 +100,8 @@ export type ScheduledSignal = {
   sentAt?: string;
   messageId?: number;
   error?: string;
+  manualOnly?: boolean;
+  validationError?: string;
 };
 
 export type AppStore = {
