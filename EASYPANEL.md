@@ -46,6 +46,9 @@ PROJECT_2_BROKER_LABEL=Click here
 WORKER_INTERVAL_MS=20000
 ```
 
+Para usar um numero operacional novo, gere uma nova `TELEGRAM_STRING_SESSION` com esse numero.
+Nao reutilize sessao de conta pessoal em producao.
+
 `PUBLIC_APP_URL` pode ficar vazio nesse modo. O worker usa `http://127.0.0.1:3000` dentro do container.
 
 ## Operacao
