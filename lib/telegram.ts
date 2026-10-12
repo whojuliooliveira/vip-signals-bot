@@ -15,15 +15,23 @@ export type SendTelegramMessage = {
 
 export async function sendTelegramMessage(token: string, payload: SendTelegramMessage) {
   const sendMode = (process.env.TELEGRAM_SEND_MODE || "auto").toLowerCase();
-  const shouldTryUserSender = sendMode === "user" || (sendMode === "auto" && canUseTelegramUserSender(payload));
 
-  if (shouldTryUserSender) {
-    try {
-      return await sendTelegramUserMessage(payload);
-    } catch (error) {
-      if (sendMode === "user") throw error;
-      console.warn("Telegram user sender falhou; usando Bot API.", error);
-    }
+  if (sendMode === "user") {
+    return sendTelegramUserMessage(payload);
+  }
+
+  try {
+    return await sendTelegramBotApiMessage(token, payload);
+  } catch (error) {
+    if (sendMode !== "auto" || !canUseTelegramUserSender(payload)) throw error;
+    console.warn("Telegram Bot API falhou; usando sender por conta.", error);
+    return sendTelegramUserMessage(payload);
+  }
+}
+
+async function sendTelegramBotApiMessage(token: string, payload: SendTelegramMessage) {
+  if (!token) {
+    throw new Error("Bot token ausente.");
   }
 
   const replyMarkup = payload.buttons
