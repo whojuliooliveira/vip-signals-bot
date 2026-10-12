@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSignalInput, scheduledAtMsForOperation, sortSignalsByOperationDate } from "../../../lib/signals";
+import { parseSignalInput, scheduledSendAtMsForOperation, sortSignalsByOperationDate } from "../../../lib/signals";
 import { deleteSignalsByIds, loadStore, localDateKey, saveStore, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   for (const signal of parsed) {
     const projectId = selectedProjectId;
-    if (scheduledAtMsForOperation(dateKey, signal.time) <= nowMs) {
+    if (scheduledSendAtMsForOperation(dateKey, signal.time) <= nowMs) {
       skippedPast.push(signal);
       continue;
     }

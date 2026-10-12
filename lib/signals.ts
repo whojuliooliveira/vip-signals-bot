@@ -40,6 +40,7 @@ const directionMap: Record<string, Direction> = {
 const allowedSignalMinutes = new Set(["00", "05", "25", "30", "35", "55"]);
 const operationStart = "07:20";
 const operationEnd = "03:30";
+const signalLeadMinutes = 5;
 
 export function parseSignalInput(input: string): SignalParseResult {
   const signals: ParsedSignal[] = [];
@@ -159,8 +160,20 @@ export function scheduledAtMsForOperation(dateKey: string, time: string) {
   return new Date(`${sendDateKey}T${time}:00-03:00`).getTime();
 }
 
+export function scheduledSendAtMsForOperation(dateKey: string, time: string) {
+  return scheduledAtMsForOperation(dateKey, time) - signalLeadMinutes * 60_000;
+}
+
+export function signalDueDateKeyForRuntime(dateKey: string, time: string) {
+  return formatSaoPauloDateKey(new Date(scheduledSendAtMsForOperation(dateKey, time)));
+}
+
+export function signalDueTimeForRuntime(dateKey: string, time: string) {
+  return formatSaoPauloTime(new Date(scheduledSendAtMsForOperation(dateKey, time)));
+}
+
 export function sortSignalsByOperationDate<T extends { dateKey: string; time: string }>(signals: T[]) {
-  return [...signals].sort((a, b) => scheduledAtMsForOperation(a.dateKey, a.time) - scheduledAtMsForOperation(b.dateKey, b.time));
+  return [...signals].sort((a, b) => scheduledSendAtMsForOperation(a.dateKey, a.time) - scheduledSendAtMsForOperation(b.dateKey, b.time));
 }
 
 function signalSortValue(time: string) {
@@ -178,4 +191,22 @@ function addDays(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function formatSaoPauloDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function formatSaoPauloTime(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }

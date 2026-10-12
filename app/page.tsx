@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock3, ListChecks, Radio, Send, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, scheduledAtMsForOperation, type SignalParseError } from "../lib/signals";
+import { parseSignalInput, scheduledSendAtMsForOperation, signalDueTimeForRuntime, type SignalParseError } from "../lib/signals";
 import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
 
 type Tab = "lista" | "config";
@@ -84,7 +84,7 @@ export default function Home() {
       && signal.dateKey === dateKey
       && !signal.sentAt
       && !signal.error
-      && scheduledAtMsForOperation(signal.dateKey, signal.time) > now
+      && scheduledSendAtMsForOperation(signal.dateKey, signal.time) > now
     ));
   }, [signals, projectId, dateKey]);
 
@@ -281,7 +281,7 @@ export default function Home() {
             <div className="panel">
               <div className="preview-head"><Clock3 size={18} /> Próximos envios</div>
               <div className="queue-list">
-                {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signal.time}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"}</span><em>agendado</em></div>)}
+                {selectedQueue.length === 0 ? <p className="muted">Nenhum envio futuro para este projeto/data.</p> : selectedQueue.map((signal) => <div className="queue-item" key={signal.id}><b>{signalDueTimeForRuntime(signal.dateKey, signal.time)}</b><span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? "CALL/BUY" : "PUT/SELL"} · sinal {signal.time}</span><em>agendado</em></div>)}
               </div>
             </div>
           </aside>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectConfig } from "../../../lib/projects";
-import { operationDateKeyForRuntime } from "../../../lib/signals";
+import { signalDueDateKeyForRuntime, signalDueTimeForRuntime } from "../../../lib/signals";
 import { escapeHtml, renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
 import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveStore, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
@@ -94,8 +94,11 @@ async function runSchedule(request: NextRequest) {
     }
   }
 
-  const signalOperationDateKey = operationDateKeyForRuntime(dateKey, time);
-  const dueSignals = store.signals.filter((signal) => !signal.sentAt && signal.dateKey === signalOperationDateKey && signal.time === time);
+  const dueSignals = store.signals.filter((signal) => (
+    !signal.sentAt
+    && signalDueDateKeyForRuntime(signal.dateKey, signal.time) === dateKey
+    && signalDueTimeForRuntime(signal.dateKey, signal.time) === time
+  ));
   for (const signal of dueSignals) {
     const project = await getProjectConfig(signal.projectId);
     if (!project) continue;
@@ -161,7 +164,7 @@ async function runSchedule(request: NextRequest) {
 
   store.sentScheduleKeys = store.sentScheduleKeys.slice(-5000);
   await saveStore(store);
-  return NextResponse.json({ ok: true, mode, time, dateKey, signalOperationDateKey, due: dueMessages.length + dueSignals.length, results });
+  return NextResponse.json({ ok: true, mode, time, dateKey, due: dueMessages.length + dueSignals.length, results });
 }
 
 export async function GET(request: NextRequest) {
