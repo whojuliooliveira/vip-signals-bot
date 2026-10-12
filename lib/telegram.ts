@@ -17,6 +17,11 @@ export type SendTelegramMessage = {
 export async function sendTelegramMessage(token: string, payload: SendTelegramMessage) {
   const sendMode = (process.env.TELEGRAM_SEND_MODE || "auto").toLowerCase();
 
+  // Bots can silently discard channel custom emojis while returning success.
+  if (sendMode === "auto" && payload.entities?.some((entity) => entity.type === "custom_emoji")) {
+    return sendTelegramUserMessage(payload);
+  }
+
   if (sendMode === "user") {
     return sendTelegramUserMessage(payload);
   }

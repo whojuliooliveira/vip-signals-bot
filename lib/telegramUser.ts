@@ -1,4 +1,5 @@
 import type { SendTelegramMessage } from "./telegram";
+import { toTelegramUserEntities } from "./telegramEntities";
 
 type TelegramClientType = import("telegram").TelegramClient;
 
@@ -15,7 +16,6 @@ export function isTelegramUserSenderConfigured() {
 export function canUseTelegramUserSender(payload: SendTelegramMessage) {
   if (!isTelegramUserSenderConfigured()) return false;
   if (payload.media) return false;
-  if (payload.entities?.length) return false;
   return true;
 }
 
@@ -26,13 +26,23 @@ export async function sendTelegramUserMessage(payload: SendTelegramMessage) {
 
   const client = await getTelegramUserClient();
   const entity = await resolveTargetEntity(client, payload.chatId, payload.chatTitle);
-  const message = withFallbackTextLink(payload.text, payload);
+  const message = payload.entities !== undefined ? payload.text : withFallbackTextLink(payload.text, payload);
 
   const sent = await client.sendMessage(entity, {
     message,
-    parseMode: "html",
+    ...(payload.entities !== undefined
+      ? { formattingEntities: toTelegramUserEntities(payload.text, payload.entities) }
+      : { parseMode: "html" }),
     linkPreview: false,
   });
+
+  const expected = payload.entities?.filter((item) => item.type === "custom_emoji") || [];
+  const actual = (sent.entities || []).filter((item) => item.className === "MessageEntityCustomEmoji");
+  if (expected.some((item) => !actual.some((received) =>
+    received.offset === item.offset && received.length === item.length
+      && "documentId" in received && String(received.documentId) === item.custom_emoji_id))) {
+    throw new Error(`Mensagem ${sent.id} publicada, mas o Telegram removeu emojis personalizados. Verifique o Premium e as permissoes da conta conectada antes de reenviar.`);
+  }
 
   return { message_id: Number(sent.id), transport: "telegram_user" };
 }

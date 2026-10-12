@@ -130,7 +130,7 @@ function renderNativeTemplate(templateText: string, templateEntities: TelegramEn
     text = rendered.text;
     entities = rendered.entities;
   }
-  return { text: polishPlainSignal(text), entities };
+  return { text, entities };
 }
 
 function replaceToken(text: string, entities: TelegramEntity[], token: string, value: string) {
@@ -155,14 +155,6 @@ function shiftEntities(entities: TelegramEntity[], start: number, oldLength: num
     if (entity.offset < end && entityEnd > start) return { ...entity, length: Math.max(0, entity.length + delta) };
     return entity;
   });
-}
-
-function polishPlainSignal(text: string) {
-  return text
-    .replace(/\bSELL(?:\s*🔴){2,}/gi, "SELL 🔴")
-    .replace(/\bBUY(?:\s*🟢){2,}/gi, "BUY 🟢")
-    .replace(/\bABAJO(?:\s*🔴){2,}/gi, "ABAJO 🔴")
-    .replace(/\bARRIBA(?:\s*🟢){2,}/gi, "ARRIBA 🟢");
 }
 
 function cloneEntities(entities: TelegramEntity[]) {
