@@ -96,7 +96,9 @@ export function renderSavedSignalTemplate(template: CapturedTemplate, payload: S
     return renderNativeTemplate(template.text, template.entities, replacements);
   }
 
-  const rendered = template.html.replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => escapeHtml(replacements[key] || ""));
+  const rendered = template.html
+    .replace(/\bHH:MM\b/gi, "{{time}}")
+    .replace(/\{\{(title|pair|market|direction|time|expiry|reentries|brokerLink|brokerLabel)\}\}/g, (_, key: string) => escapeHtml(replacements[key] || ""));
   return { text: polishRenderedSignal(rendered) };
 }
 
@@ -125,6 +127,7 @@ function polishRenderedSignal(html: string) {
 function renderNativeTemplate(templateText: string, templateEntities: TelegramEntity[], replacements: Record<string, string>): RenderedTelegramMessage {
   let text = templateText;
   let entities = cloneEntities(templateEntities);
+  ({ text, entities } = replaceToken(text, entities, "HH:MM", replacements.time));
   for (const [key, value] of Object.entries(replacements)) {
     const rendered = replaceToken(text, entities, `{{${key}}}`, value);
     text = rendered.text;

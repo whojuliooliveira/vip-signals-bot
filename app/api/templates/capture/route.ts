@@ -161,6 +161,7 @@ function normalizeTemplate(html: string, projectName: string, brokerLink: string
   template = template.replace(/\b[A-Z]{3}\/[A-Z]{3,}\b|\b[A-Z]{6,}(?=\s*(?:-?OTC|\())/g, "{{pair}}");
   template = template.replace(/\(\s*OTC\s*\)/gi, "({{market}})");
   template = template.replace(/\b([01]?\d|2[0-3]):[0-5]\d\b/, "{{time}}");
+  template = template.replace(/\bHH:MM\b/gi, "{{time}}");
   template = template.replace(/\b(BUY|CALL|UP|ARRIBA)\b/gi, "{{direction}}");
   template = template.replace(/\b(SELL|PUT|DOWN|ABAJO)\b/gi, "{{direction}}");
   template = template.replace(/make\s+{{direction}}\s+to\s+2\s+Gale&apos;s/gi, "make up to {{reentries}} Gale&apos;s");
@@ -176,6 +177,7 @@ function normalizeNativeTemplate(message: TelegramCapturedMessage, projectName: 
   ({ text, entities } = replaceNativeRegex(text, entities, /\b[A-Z]{3}\/[A-Z]{3,}\b|\b[A-Z]{6,}(?=\s*(?:-?OTC|\())/g, "{{pair}}"));
   ({ text, entities } = replaceNativeRegex(text, entities, /\(\s*OTC\s*\)/gi, "({{market}})"));
   ({ text, entities } = replaceNativeRegex(text, entities, /\b([01]?\d|2[0-3]):[0-5]\d\b/, "{{time}}"));
+  ({ text, entities } = replaceNativeRegex(text, entities, /\bHH:MM\b/gi, "{{time}}"));
   ({ text, entities } = replaceNativeRegex(text, entities, /\b(BUY|CALL|UP|ARRIBA|SELL|PUT|DOWN|ABAJO)\b/gi, "{{direction}}"));
   ({ text, entities } = replaceNativeRegex(text, entities, /make\s+\{\{direction\}\}\s+to\s+2\s+Gale's/gi, "make up to {{reentries}} Gale's"));
   return { text, entities };
