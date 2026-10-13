@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     for (const projectId of projectIds) {
       const project = await getProjectConfig(String(projectId));
       if (!project) throw new Error(`Unknown project: ${projectId}`);
-      if (!project.chatId) throw new Error(`Missing chat id for ${project.name}`);
+      if (!project.chatId && !project.telegramAccount?.targetPeer) throw new Error(`Missing Telegram destination for ${project.name}`);
 
       const message = body.kind === "custom"
         ? renderCustom(project.language, project.name, String(body.customText || ""), project.link, project.brokerLabel)

@@ -31,7 +31,10 @@ export async function GET() {
         botToken: "",
         botTokenConfigured: Boolean(runtime?.botToken || project.botToken),
         chatId: runtime?.chatId || project.chatId || "",
-        telegramAccount: publicTelegramAccount(project.telegramAccount, project.id === "expert_b"),
+        telegramAccount: {
+          ...publicTelegramAccount(project.telegramAccount, project.id === "expert_b"),
+          ...(project.language === "es" ? { sendMode: "user" as const } : {}),
+        },
       };
     });
     const heartbeat = hasSupabase() ? await supabaseSelect<{ created_at: string }>("schedule_keys", "select=created_at&id=eq.worker-heartbeat") : [];
@@ -78,5 +81,5 @@ export async function POST(request: NextRequest) {
     store.projects = Array.from(byId.values());
   }
   await saveStore(store);
-  return NextResponse.json({ ok: true, messages: store.messages, projects: store.projects.map((project) => ({ ...project, botToken: "", botTokenConfigured: Boolean(project.botToken), telegramAccount: publicTelegramAccount(project.telegramAccount, project.id === "expert_b") })) });
+  return NextResponse.json({ ok: true, messages: store.messages, projects: store.projects.map((project) => ({ ...project, botToken: "", botTokenConfigured: Boolean(project.botToken), telegramAccount: { ...publicTelegramAccount(project.telegramAccount, project.id === "expert_b"), ...(project.language === "es" ? { sendMode: "user" as const } : {}) } })) });
 }

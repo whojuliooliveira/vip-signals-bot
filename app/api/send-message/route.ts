@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const store = await loadStore();
     const project = await getProjectConfig(String(body.projectId || ""));
     const message = store.messages.find((item) => item.kind === body.kind);
-    if (!project?.chatId || !message) throw new Error("Canal ou mensagem nao encontrado.");
+    if (!project || (!project.chatId && !project.telegramAccount?.targetPeer) || !message) throw new Error("Canal ou mensagem nao encontrado.");
     const payload = standardMessagePayload(project, message);
     try {
       const sent = await sendTelegramMessage(project.botToken, payload, project.telegramAccount);

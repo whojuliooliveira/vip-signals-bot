@@ -3,7 +3,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "C:/Users/julio_r7nr
 const baseUrl = process.env.UI_TEST_URL || "http://127.0.0.1:5187";
 const dateKey = "2026-10-13";
 const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false, sharedCredentialsConfigured: true } };
-const spanishProject = { id: "expert_a", name: "José Álvarez | Señales VIP", enabled: true, language: "es", chatId: "-100456", botTokenConfigured: false, link: "https://example.es", brokerLabel: "Haz clic aquí", telegramAccount: { sendMode: "user", status: "connected", sessionConfigured: true, sharedCredentialsConfigured: true, accountLabel: "Cuenta Test" } };
+const spanishProject = { id: "expert_a", name: "José Álvarez | Señales VIP", enabled: true, language: "es", chatId: "", botTokenConfigured: false, link: "https://example.es", brokerLabel: "Haz clic aquí", telegramAccount: { sendMode: "user", targetPeer: "@senalesvip", status: "connected", sessionConfigured: true, sharedCredentialsConfigured: true, accountLabel: "Cuenta Test" } };
 const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
 const signals = [
   { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
@@ -125,6 +125,7 @@ async function main() {
     await page.getByText("Tom Test (@tomtest)", { exact: true }).waitFor();
     await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_a");
     assert.equal(await page.getByLabel("Token do bot").count(), 0);
+    assert.equal(await page.getByLabel("Canal de destino").getAttribute("placeholder"), "@canal ou -100...");
     assert.equal(await page.getByLabel("Forma de envio").inputValue(), "user");
     assert.equal(await page.getByLabel("Forma de envio").isDisabled(), true);
     await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_b");
