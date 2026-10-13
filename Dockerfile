@@ -19,6 +19,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+ENV PUBLIC_APP_URL=https://vip-signals-bot-bice.vercel.app
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

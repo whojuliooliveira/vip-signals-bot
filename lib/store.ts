@@ -304,7 +304,7 @@ async function loadSupabaseStore(): Promise<AppStore> {
       error: row.error || undefined,
     })),
     logs: logRows.map((row) => row.payload),
-    sentScheduleKeys: keyRows.map((row) => row.id),
+    sentScheduleKeys: keyRows.filter((row) => row.id !== "worker-heartbeat").map((row) => row.id),
     captureSessions: captureRows.map((row) => row.payload),
   };
 }
