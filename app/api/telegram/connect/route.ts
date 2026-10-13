@@ -51,9 +51,9 @@ export async function POST(request: NextRequest) {
     if (action === "start") {
       const account: TelegramAccountSettings = {
         ...project.telegramAccount,
-        apiId: String(body.apiId || project.telegramAccount?.apiId || "").trim(),
-        apiHash: String(body.apiHash || project.telegramAccount?.apiHash || "").trim(),
-        phone: String(body.phone || project.telegramAccount?.phone || "").replace(/\s+/g, ""),
+        apiId: String(body.apiId || project.telegramAccount?.apiId || process.env.TELEGRAM_API_ID || "").trim(),
+        apiHash: String(body.apiHash || project.telegramAccount?.apiHash || process.env.TELEGRAM_API_HASH || "").trim(),
+        phone: String(body.phone || project.telegramAccount?.phone || process.env.TELEGRAM_PHONE || "").replace(/\s+/g, ""),
         sendMode: project.telegramAccount?.sendMode || "auto",
       };
       if (!account.phone?.startsWith("+")) throw new Error("Informe o telefone com código do país, por exemplo +5511999999999.");

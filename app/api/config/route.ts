@@ -4,6 +4,7 @@ import { loadStore, saveStore, type TelegramAccountSettings } from "../../../lib
 import { hasSupabase, supabaseSelect } from "../../../lib/supabase";
 
 function publicTelegramAccount(account: TelegramAccountSettings | undefined, allowLegacy: boolean) {
+  const sharedCredentialsConfigured = Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH);
   const legacyConfigured = allowLegacy && Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH && (process.env.TELEGRAM_STRING_SESSION || process.env.TELEGRAM_SESSION));
   return {
     sendMode: account?.sendMode || process.env.TELEGRAM_SEND_MODE || "auto",
@@ -13,6 +14,7 @@ function publicTelegramAccount(account: TelegramAccountSettings | undefined, all
     accountLabel: account?.accountLabel || (legacyConfigured ? "Conta atual do servidor" : ""),
     status: account?.stringSession ? "connected" : account?.status || (legacyConfigured ? "legacy" : "disconnected"),
     apiHashConfigured: Boolean(account?.apiHash),
+    sharedCredentialsConfigured,
     sessionConfigured: Boolean(account?.stringSession || legacyConfigured),
     legacyFallback: !account?.stringSession && legacyConfigured,
   };

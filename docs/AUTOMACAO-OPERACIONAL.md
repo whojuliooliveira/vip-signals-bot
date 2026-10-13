@@ -281,7 +281,7 @@ Alterar o espanhol nao altera o ingles. A sessao antiga configurada por variavel
 2. Escolha o canal no topo.
 3. Abra **Conta Telegram deste canal**.
 4. Clique em **Conectar conta** ou **Trocar conta**.
-5. Informe o API ID, API Hash e telefone com codigo do pais.
+5. Informe o telefone com codigo do pais. API ID e API Hash aparecem somente quando ainda nao existem credenciais tecnicas no servidor.
 6. Digite o codigo recebido no aplicativo Telegram.
 7. Se a conta tiver verificacao em duas etapas, informe a senha 2FA.
 8. Confira o nome da conta exibido no painel.

@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "C:/Users/julio_r7nro/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
 const baseUrl = process.env.UI_TEST_URL || "http://127.0.0.1:5187";
 const dateKey = "2026-10-13";
-const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false } };
+const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false, sharedCredentialsConfigured: true } };
 const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
 const signals = [
   { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
@@ -114,8 +114,8 @@ async function main() {
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     assert.equal(await page.locator(".settings-sections > details[open]").count(), 2);
     await page.getByRole("button", { name: "Conectar conta", exact: true }).click();
-    await page.getByLabel("API ID").fill("123456");
-    await page.getByLabel("API Hash").fill("hash-seguro");
+    assert.equal(await page.getByLabel("API ID").count(), 0);
+    assert.equal(await page.getByLabel("API Hash").count(), 0);
     await page.getByLabel("Telefone").fill("+5511999999999");
     await page.getByRole("button", { name: "Enviar código", exact: true }).click();
     await page.getByLabel("Código recebido").fill("12345");

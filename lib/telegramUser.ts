@@ -81,7 +81,7 @@ async function getTelegramUserClient(account?: TelegramAccountSettings) {
     const client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
     await client.connect();
     if (!(await client.isUserAuthorized())) {
-      throw new Error("Sessao Telegram da conta nao autorizada. Rode npm run telegram:login uma vez.");
+      throw new Error("Sessão Telegram não autorizada. Abra Configurações, selecione este canal e use Trocar conta.");
     }
     return client;
   })();
