@@ -1,409 +1,240 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ListChecks, Radio, Send, Settings } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Clock3, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Sun, Sunrise, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, validateSignalTime, type ParsedSignal, type SignalParseError } from "../lib/signals";
-import type { CaptureSession, CapturedTemplate, MessageKind, TemplateKind } from "../lib/store";
+import { parseSignalInput, validateSignalTime } from "../lib/signals";
+import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
 
-type Tab = "lista" | "config";
-type DayMode = "weekday" | "saturday" | "sunday";
-type Direction = "UP" | "DOWN";
+type Project = ProjectSettings & { botTokenConfigured?: boolean };
+type Notice = { text: string; error?: boolean };
+const dateInBrazil = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+const timeInBrazil = (date: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+const labels: Record<TemplateKind, string> = { signal_up: "CALL / BUY", signal_down: "PUT / SELL", morning_emoji: "Emoji de abertura", good_morning: "Bom dia", analysis_start: "Início das análises", good_night: "Boa noite" };
+const standardKinds = ["morning_emoji", "good_morning", "analysis_start", "good_night"] as const;
+const messageIcons = { morning_emoji: Sunrise, good_morning: Sun, analysis_start: Radio, good_night: Moon };
+const days: [DayMode, string][] = [["weekday", "Seg–Sex"], ["saturday", "Sábado"], ["sunday", "Domingo"]];
+const weekdays: [Weekday, string][] = [["monday", "Seg"], ["tuesday", "Ter"], ["wednesday", "Qua"], ["thursday", "Qui"], ["friday", "Sex"], ["saturday", "Sáb"], ["sunday", "Dom"]];
 
-type ProjectSettings = {
-  id: string;
-  name: string;
-  language: "es" | "en";
-  botToken?: string;
-  botTokenConfigured?: boolean;
-  chatId?: string;
-  link: string;
-  brokerLabel: string;
-  signalTemplates?: { UP?: CapturedTemplate; DOWN?: CapturedTemplate };
-  messageTemplates?: Partial<Record<MessageKind, CapturedTemplate>>;
-  enabled: boolean;
-};
-
-type SavedMessage = {
-  id: string;
-  label: string;
-  kind: MessageKind;
-  enabled: boolean;
-  projects: string[];
-  textByLanguage: { es?: string; en?: string };
-  timeByDay: Partial<Record<DayMode, string>>;
-  includeInlineButton: boolean;
-};
-
-type ScheduledSignal = {
-  id: string;
-  dateKey: string;
-  projectId: string;
-  pair: string;
-  market: string;
-  direction: Direction;
-  time: string;
-  sentAt?: string;
-  error?: string;
-  manualOnly?: boolean;
-  validationError?: string;
-};
-
-const today = new Date().toISOString().slice(0, 10);
-const dayLabels: Record<DayMode, string> = { weekday: "Seg-Sex", saturday: "Sábado", sunday: "Domingo" };
-const captureLabels: Record<TemplateKind, string> = {
-  signal_up: "Sinal CALL / BUY",
-  signal_down: "Sinal PUT / SELL",
-  morning_emoji: "Emoji ou mídia de abertura",
-  good_morning: "Bom dia",
-  analysis_start: "Início das análises",
-  good_night: "Boa noite",
-};
-const messageKinds = ["morning_emoji", "good_morning", "analysis_start", "good_night"] as const;
+async function requestJson(url: string, body?: unknown) {
+  const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || "Não foi possível concluir. Tente novamente.");
+  return result;
+}
 
 export default function Home() {
-  const [tab, setTab] = useState<Tab>("lista");
-  const [projects, setProjects] = useState<ProjectSettings[]>([]);
+  const [tab, setTab] = useState<"lista" | "config">("lista");
+  const [projects, setProjects] = useState<Project[]>([]);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [signals, setSignals] = useState<ScheduledSignal[]>([]);
+  const [logs, setLogs] = useState<SendLog[]>([]);
   const [projectId, setProjectId] = useState("expert_b");
-  const [dateKey, setDateKey] = useState(today);
-  const [rawText, setRawText] = useState("");
-  const [status, setStatus] = useState("");
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [busy, setBusy] = useState(false);
+  const [dateKey, setDateKey] = useState(() => dateInBrazil());
+  const [filter, setFilter] = useState<"all" | "auto" | "manual">("all");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const [workerLastSeen, setWorkerLastSeen] = useState<string | null>(null);
-  const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
-  const [captureProject, setCaptureProject] = useState("expert_b");
+  const [now, setNow] = useState(Date.now());
+  const [workerDetail, setWorkerDetail] = useState(false);
+  const [rawText, setRawText] = useState("");
+  const [replaceWarning, setReplaceWarning] = useState("");
+  const [importError, setImportError] = useState("");
+  const [manualResults, setManualResults] = useState<Record<string, { sent?: boolean; error?: string }>>({});
   const [captureKind, setCaptureKind] = useState<TemplateKind>("signal_down");
-  const didLoad = useRef(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const configDirty = useRef(false);
+  const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const importButtonRef = useRef<HTMLButtonElement>(null);
+  const dirty = useRef(false);
+  const revision = useRef(0);
+  const actionPending = useRef(false);
+  const selected = projects.find((project) => project.id === projectId);
+  const parsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
+  const automatic = (signal: ScheduledSignal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time);
+  const dailySignals = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey).sort((a, b) => a.time.localeCompare(b.time) || a.pair.localeCompare(b.pair)), [signals, projectId, dateKey]);
+  const visibleSignals = dailySignals.filter((signal) => filter === "all" || (filter === "auto" ? automatic(signal) : !automatic(signal)));
+  const recentLogs = logs.filter((log) => log.projectId === projectId).slice(0, 5);
+  const connected = Boolean(workerLastSeen && now - Date.parse(workerLastSeen) < 120000);
 
-  const selectedProject = projects.find((project) => project.id === projectId);
-  const parsed = useMemo(() => parseSignalInput(rawText), [rawText]);
-  const fullParsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
-  const savedSignalsForDate = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey), [signals, projectId, dateKey]);
-  const visibleSignals = fullParsed.signals.length
-    ? fullParsed.signals
-    : savedSignalsForDate.map((signal) => ({
-      pair: signal.pair,
-      market: signal.market,
-      direction: signal.direction,
-      time: signal.time,
-      sourceText: "",
-      validationError: signal.validationError || validateSignalTime(signal.time) || undefined,
-    }));
-
-  async function loadConfig(silent = false) {
-    if (silent && configDirty.current) return;
+  async function loadConfig(initial = false) {
     try {
-      const response = await fetch("/api/config", { cache: "no-store" });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha ao carregar");
-      setProjects(result.projects || []);
-      setMessages(result.messages || []);
+      const result = await requestJson("/api/config");
+      if (!dirty.current) { setProjects(result.projects || []); setMessages(result.messages || []); }
       setSignals(result.signals || []);
+      setLogs(result.logs || []);
       setWorkerLastSeen(result.workerLastSeen || null);
-      if (!projectId && result.projects?.[0]?.id) setProjectId(result.projects[0].id);
-      if (!silent) setStatus("");
-      didLoad.current = true;
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Erro ao carregar");
-    }
+      if (initial) setNotice({ text: error instanceof Error ? error.message : "Erro ao carregar", error: true });
+    } finally { setLoading(false); }
   }
 
   useEffect(() => {
-    loadConfig();
-    const timer = setInterval(() => loadConfig(true), 12000);
+    loadConfig(true);
+    const timer = setInterval(() => { setNow(Date.now()); loadConfig(); }, 12000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    if (!didLoad.current || !configDirty.current) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveState !== "saving" && setSaveState("idle");
-    saveTimer.current = setTimeout(() => saveConfig(), 900);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
+    if (!dirty.current) return;
+    const currentRevision = revision.current;
+    const timer = setTimeout(async () => {
+      setSaveState("saving");
+      try {
+        await requestJson("/api/config", { projects, messages });
+        if (currentRevision === revision.current) { dirty.current = false; setSaveState("saved"); }
+      } catch (error) {
+        setSaveState("error");
+        setNotice({ text: error instanceof Error ? error.message : "Erro ao salvar", error: true });
+      }
+    }, 900);
+    return () => clearTimeout(timer);
   }, [projects, messages]);
 
   useEffect(() => {
-    if (!captureSession || captureSession.status !== "waiting") return;
+    if (!notice || notice.error) return;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (captureSession?.status !== "waiting") return;
+    let polling = false;
     const timer = setInterval(async () => {
-      const response = await fetch(`/api/templates/capture?sessionId=${encodeURIComponent(captureSession.id)}`, { cache: "no-store" });
-      const result = await response.json();
-      if (!result.ok) {
-        setStatus(result.error || "Erro na captura");
-        clearInterval(timer);
-        return;
-      }
-      setCaptureSession(result.session);
-      if (result.session.status === "captured") {
-        setStatus("Modelo capturado e salvo.");
-        await loadConfig(true);
-        clearInterval(timer);
-      }
-      if (result.session.status === "expired" || result.session.status === "failed") {
-        setStatus(result.session.error || "Captura encerrada.");
-        clearInterval(timer);
-      }
+      if (polling) return;
+      polling = true;
+      try {
+        const result = await requestJson(`/api/templates/capture?sessionId=${encodeURIComponent(captureSession.id)}`);
+        setCaptureSession(result.session);
+        if (result.session.status === "captured") { setNotice({ text: "Modelo capturado e salvo." }); await loadConfig(); }
+        if (["expired", "failed"].includes(result.session.status)) setNotice({ text: result.session.error || "Captura encerrada.", error: true });
+      } catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro na captura", error: true }); }
+      finally { polling = false; }
     }, 2500);
     return () => clearInterval(timer);
   }, [captureSession?.id, captureSession?.status]);
 
-  async function saveConfig() {
-    const invalid = projects.some((project) => project.enabled && (!project.chatId || !(project.botToken || project.botTokenConfigured)));
-    if (invalid) {
-      setSaveState("error");
-      setStatus("Projeto ativo precisa de bot e destino configurados.");
-      return;
-    }
-    setSaveState("saving");
-    try {
-      const response = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projects, messages }),
-      });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha ao salvar");
-      configDirty.current = false;
-      setSaveState("saved");
-    } catch (error) {
-      setSaveState("error");
-      setStatus(error instanceof Error ? error.message : "Erro ao salvar");
-    }
-  }
+  function markDirty() { dirty.current = true; revision.current += 1; setSaveState("saving"); }
+  function patchProject(patch: Partial<Project>) { markDirty(); setProjects((items) => items.map((item) => item.id === projectId ? { ...item, ...patch } : item)); }
+  function patchMessage(id: string, patch: Partial<SavedMessage>) { markDirty(); setMessages((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item)); }
+  function closeImport() { if (busy === "import") return; dialogRef.current?.close(); importButtonRef.current?.focus(); }
+  function openImport() { setReplaceWarning(""); setImportError(""); dialogRef.current?.showModal(); }
 
   async function uploadList(confirmReplace = false) {
-    if (fullParsed.errors.length) {
-      setStatus("Corrija as linhas inválidas antes de subir.");
-      return;
-    }
-    setBusy(true);
-    setStatus("");
+    if (actionPending.current || !parsed.signals.length || parsed.errors.length) return;
+    actionPending.current = true; setBusy("import"); setImportError("");
     try {
-      const response = await fetch("/api/signals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, dateKey, rawText, confirmReplace }),
-      });
+      const response = await fetch("/api/signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, dateKey, rawText, confirmReplace }) });
       const result = await response.json();
-      if (result.requiresConfirmation) {
-        const ok = window.confirm(`${result.error}\n\nConfirmar substituição da fila pendente?`);
-        if (ok) return uploadList(true);
-        setStatus("Importação cancelada.");
-        return;
-      }
-      if (!result.ok) throw new Error(result.error || "Falha ao subir lista");
-      setSignals(result.signals || []);
-      const skipped = result.skippedPast?.length ? ` ${result.skippedPast.length} horário(s) vencido(s) ignorado(s).` : "";
-      setStatus(`${result.created.length} sinal(is) agendado(s).${skipped}`);
-      await loadConfig(true);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Erro desconhecido");
-    } finally {
-      setBusy(false);
-    }
+      if (result.requiresConfirmation) { setReplaceWarning(result.error || "Já existe uma lista para esta data."); return; }
+      if (!result.ok) throw new Error(result.error || "Erro ao importar");
+      setRawText(""); setReplaceWarning(""); dialogRef.current?.close(); importButtonRef.current?.focus();
+      setNotice({ text: `${result.created?.length || 0} sinais salvos.${result.skippedPast?.length ? ` ${result.skippedPast.length} horários vencidos ignorados.` : ""}` });
+      await loadConfig();
+    } catch (error) { setImportError(error instanceof Error ? error.message : "Erro ao importar"); }
+    finally { setBusy(""); actionPending.current = false; }
   }
 
-  async function sendSignalNow(signal: ParsedSignal) {
-    setBusy(true);
-    setStatus(`Enviando ${signal.pair} ${signal.time} agora...`);
+  async function sendSignalNow(signal: ScheduledSignal) {
+    if (actionPending.current) return;
+    actionPending.current = true; setBusy(signal.id);
     try {
-      const response = await fetch("/api/send-signal", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          kind: "signal",
-          projectId,
-          pair: signal.pair,
-          market: signal.market,
-          direction: signal.direction,
-          time: signal.time,
-          expiryMinutes: signal.expiryMinutes || 5,
-          reentries: 2,
-          includeInlineButton: true,
-        }),
-      });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha ao enviar");
-      setStatus(`${signal.pair} ${signal.time} enviado agora.`);
-      await loadConfig(true);
+      await requestJson("/api/send-signal", { kind: "signal", projectId: signal.projectId, pair: signal.pair, market: signal.market, direction: signal.direction, time: signal.time, expiryMinutes: signal.expiryMinutes || 5, reentries: signal.reentries ?? 2, includeInlineButton: true });
+      setManualResults((items) => ({ ...items, [signal.id]: { sent: true } }));
+      setNotice({ text: `${signal.pair} · ${signal.time} enviado.` }); await loadConfig();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Erro ao enviar");
-    } finally {
-      setBusy(false);
-    }
+      const text = error instanceof Error ? error.message : "Erro ao enviar";
+      setManualResults((items) => ({ ...items, [signal.id]: { error: text } })); setNotice({ text, error: true });
+    } finally { setBusy(""); actionPending.current = false; }
+  }
+
+  async function sendStandardNow(kind: MessageKind) {
+    if (actionPending.current) return;
+    actionPending.current = true; setBusy(kind);
+    try { await requestJson("/api/send-message", { projectId, kind }); setNotice({ text: `${labels[kind as TemplateKind] || "Mensagem"} enviada ao canal.` }); await loadConfig(); }
+    catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro ao enviar", error: true }); }
+    finally { setBusy(""); actionPending.current = false; }
   }
 
   async function startCapture() {
-    setBusy(true);
-    setStatus("");
+    if (actionPending.current) return;
+    actionPending.current = true; setBusy("capture");
     try {
-      const response = await fetch("/api/templates/capture", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: captureProject, kind: captureKind }),
-      });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha ao iniciar captura");
-      setCaptureSession(result.session);
-      setStatus(result.instruction);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Erro desconhecido");
-    } finally {
-      setBusy(false);
-    }
+      const result = await requestJson("/api/templates/capture", { projectId, kind: captureKind });
+      setCaptureSession(result.session); setNotice({ text: result.instruction });
+    } catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro na captura", error: true }); }
+    finally { setBusy(""); actionPending.current = false; }
   }
 
-  async function sendStandardNow(targetProjectId: string, kind: MessageKind) {
-    setBusy(true);
-    setStatus("Enviando mensagem...");
-    try {
-      const response = await fetch("/api/send-message", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: targetProjectId, kind }),
-      });
-      const result = await response.json();
-      if (!result.ok) throw new Error(result.error || "Falha no envio");
-      setStatus("Mensagem enviada ao canal.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Falha no envio");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function patchProject(id: string, patch: Partial<ProjectSettings>) {
-    configDirty.current = true;
-    setProjects((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function patchMessage(id: string, patch: Partial<SavedMessage>) {
-    configDirty.current = true;
-    setMessages((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function patchMessageTime(id: string, day: DayMode, value: string) {
-    configDirty.current = true;
-    setMessages((items) => items.map((item) => item.id === id ? { ...item, timeByDay: { ...item.timeByDay, [day]: value } } : item));
-  }
-
-  return (
-    <div className="side-app">
-      <aside className="lean-sidebar">
-        <div className="brand compact-brand">
-          <img className="brand-logo" src="/logo-dms-transparent.png" alt="DMS" />
-          <div className="brand-title">Sinais</div>
+  return <div className="console">
+    <header className="app-header">
+      <a className="brand" href="/" aria-label="DMS Sinais"><img src="/logo-dms-transparent.png" alt="DMS" /><span>SINAIS</span></a>
+      <nav aria-label="Navegação principal">
+        <button className={tab === "lista" ? "selected" : ""} onClick={() => setTab("lista")}><ListChecks size={16} />Lista do dia</button>
+        <button className={tab === "config" ? "selected" : ""} onClick={() => setTab("config")}><Settings size={16} />Configurações</button>
+      </nav>
+      <span className="header-timezone"><Clock3 size={14} /> Brasília · UTC−3</span>
+    </header>
+    <main>
+      <div className="page-heading"><h1>{tab === "lista" ? "Lista do dia" : "Configurações"}</h1>
+        <div className="connection-wrap"><button className={`connection ${connected ? "online" : "offline"}`} aria-expanded={workerDetail} onClick={() => setWorkerDetail(!workerDetail)}><span className="status-dot" />{loading ? "Verificando automático" : connected ? "Automático conectado" : "Automático sem confirmação"}<ChevronDown size={14} /></button>
+          {workerDetail && <div className="connection-detail" role="status">{workerLastSeen ? `Última atividade: ${timeInBrazil(workerLastSeen)} · ${dateInBrazil(new Date(workerLastSeen))}` : "Nenhuma atividade recente registrada."}<br />Horário de Brasília</div>}
         </div>
-        <nav className="side-nav lean-nav">
-          <button className={tab === "lista" ? "active" : ""} onClick={() => setTab("lista")}><ListChecks size={16} /> Lista do dia</button>
-          <button className={tab === "config" ? "active" : ""} onClick={() => setTab("config")}><Settings size={16} /> Configurações</button>
-        </nav>
-        <div className="sidebar-save">
-          <span className="dot" />
-          <span className={`save-state ${saveState}`}>{saveState === "saving" ? "Salvando" : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : "Operação"}</span>
-        </div>
-      </aside>
+      </div>
+      <div className="toolbar">
+        <label className="channel-field">Canal<select value={projectId} disabled={loading || !!busy} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+        {tab === "lista" ? <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></> : <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}
+      </div>
 
-      <main className="lean-app">
-        <header className="content-title">
-          <div>
-            <h1>{tab === "lista" ? "Lista do dia" : "Configurações"}</h1>
-            <p>{tab === "lista" ? "Cole a lista, confira os sinais e envie quando quiser." : "Bots, modelos e horários automáticos por projeto."}</p>
-          </div>
-        </header>
-
-      {tab === "lista" && (
-        <section className="daily-grid">
-          <div className="panel list-panel">
-            <div className="list-controls">
-              <div className="field"><label>Projeto</label><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.language === "en" ? "Inglês" : "Espanhol"} · {project.name}</option>)}</select></div>
-              <div className="field"><label>Data</label><input type="date" value={dateKey} onChange={(event) => setDateKey(event.target.value)} /></div>
-            </div>
-            <textarea className="bulk-textarea clean-textarea" value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="Cole a lista completa aqui..." />
-            <button className="primary-button submit-list" disabled={busy || fullParsed.signals.length === 0 || fullParsed.errors.length > 0} onClick={() => uploadList(false)}><Send size={16} /> Salvar lista da data</button>
-          </div>
-
-          <aside className="side-stack">
-            <div className="panel">
-              <div className="preview-head"><CheckCircle2 size={18} /> Lista completa lida</div>
-              <div className="validation-summary"><strong>{visibleSignals.length}</strong><span>{fullParsed.signals.length ? "sinais reconhecidos" : "sinais salvos na data"}</span></div>
-              {fullParsed.errors.length > 0 && <ErrorList errors={fullParsed.errors} />}
-              <div className="detected-list full-detected">
-                {visibleSignals.length === 0 && <p className="muted">Cole uma lista ou escolha uma data com sinais salvos.</p>}
-                {visibleSignals.slice(0, 200).map((signal, index) => <div className={`signal-row ${signal.validationError ? "outside" : "inside"}`} key={`${signal.time}-${signal.pair}-${index}`}>
-                  <b>{signal.time}</b>
-                  <span>{signal.pair} · {signal.market} · {signal.direction === "UP" ? selectedProject?.language === "en" ? "BUY" : "ARRIBA" : selectedProject?.language === "en" ? "SELL" : "ABAJO"}</span>
-                  <em>{signal.validationError ? "fora da regra" : "entra na fila"}</em>
-                  <button disabled={busy} onClick={() => sendSignalNow(signal)}>Enviar agora</button>
-                </div>)}
-              </div>
-            </div>
-          </aside>
+      {tab === "lista" ? <div className="workspace">
+        <section className="signals-section" aria-label="Sinais da data">
+          <div className="list-heading"><div className="filters" role="group" aria-label="Filtrar sinais">{([["all", "Todos"], ["auto", "Automáticos"], ["manual", "Manuais"]] as const).map(([value, label]) => <button aria-pressed={filter === value} className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)}>{label}</button>)}</div><span className="count">{visibleSignals.length} sinais</span></div>
+          {loading ? <div className="empty"><Loader2 className="spin" size={22} /><p>Carregando sinais…</p></div> : visibleSignals.length === 0 ? <div className="empty"><ListChecks size={28} /><h2>{dailySignals.length ? "Nenhum sinal neste filtro" : "Nenhum sinal nesta data"}</h2>{!dailySignals.length && <button onClick={openImport}><Import size={16} />Importar lista</button>}</div> : <table className="signals-table"><thead><tr><th>Horário</th><th>Ativo</th><th>Direção</th><th>Automático</th><th>Status</th><th><span className="sr-only">Enviar</span></th></tr></thead><tbody>
+            {visibleSignals.map((signal) => {
+              const isAuto = automatic(signal);
+              const result = manualResults[signal.id];
+              const error = result?.error || (!result?.sent && signal.error);
+              const sent = result?.sent || signal.sentAt;
+              const state = sent ? "Enviado" : error ? "Erro" : isAuto ? "Aguardando" : "Manual";
+              return <tr key={signal.id}>
+                <td data-label="Horário" className="signal-time">{signal.time}</td>
+                <td data-label="Ativo" className="asset"><strong>{signal.pair}</strong><small>{signal.market}</small></td>
+                <td data-label="Direção"><span className={`direction ${signal.direction === "UP" ? "buy" : "sell"}`}>{signal.direction === "UP" ? <ArrowUpRight size={15} /> : <ArrowDownLeft size={15} />}{signal.direction === "UP" ? "CALL / BUY" : "PUT / SELL"}</span></td>
+                <td data-label="Automático" className="auto-cell">{isAuto ? "Sim" : "Não"}</td>
+                <td data-label="Status">{error && !sent ? <button className="error-link" onClick={() => setNotice({ text: String(error), error: true })}><AlertCircle size={14} />Erro</button> : <span className={`signal-status ${sent ? "sent" : ""}`}>{sent && <Check size={14} />}{state}</span>}</td>
+                <td className="send-cell"><button disabled={!!busy || !selected?.chatId} onClick={() => sendSignalNow(signal)} aria-label={`Enviar agora ${signal.pair} ${signal.time}`}>{busy === signal.id ? <Loader2 size={14} className="spin" /> : <Send size={14} />}{busy === signal.id ? "Enviando…" : "Enviar agora"}</button></td>
+              </tr>;
+            })}
+          </tbody></table>}
         </section>
-      )}
+        <aside className="activity-sidebar">
+          <section><h2>Mensagens padrão</h2><div className="standard-list">{standardKinds.map((kind) => { const Icon = messageIcons[kind]; return <div className="standard-row" key={kind}><Icon size={17} /><span>{labels[kind]}</span><button disabled={!!busy || !selected?.chatId} onClick={() => sendStandardNow(kind)} aria-label={`Testar ${labels[kind]}`}>{busy === kind ? <Loader2 size={14} className="spin" /> : <Send size={14} />}Testar</button></div>; })}</div></section>
+          <section className="recent-section"><h2>Últimos envios</h2>{!recentLogs.length ? <p className="subtle">Nenhum envio registrado.</p> : <ol className="recent-list">{recentLogs.map((log) => <li key={log.id}><div className={`log-icon ${log.status}`}>{log.status === "sent" ? <Check size={14} /> : <AlertCircle size={14} />}</div><div><strong>{log.kind === "signal" ? log.label : labels[log.kind as TemplateKind] || log.label}</strong><span>{log.source === "manual" ? "Manual" : "Automático"} · {log.status === "sent" ? "Enviado" : "Erro"}</span>{log.error && <button className="error-link" onClick={() => setNotice({ text: log.error!, error: true })}>Ver erro</button>}</div><time title={new Date(log.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}>{timeInBrazil(log.at)}</time></li>)}</ol>}</section>
+        </aside>
+      </div> : selected && <div className="settings-sections" key={projectId}>
+        <details><summary>Canal<ChevronDown size={16} /></summary><div className="settings-body fields-grid">
+          <label className="wide">Nome<input value={selected.name} onChange={(event) => patchProject({ name: event.target.value })} /></label>
+          <label className="wide">Link do broker<input value={selected.link} onChange={(event) => patchProject({ link: event.target.value })} /></label>
+          <label>Texto do botão<input value={selected.brokerLabel} onChange={(event) => patchProject({ brokerLabel: event.target.value })} /></label>
+          <label className="checkbox"><input type="checkbox" checked={selected.enabled} onChange={(event) => patchProject({ enabled: event.target.checked })} />Canal ativo</label>
+        </div></details>
+        <details><summary>Automação<ChevronDown size={16} /></summary><div className="settings-body"><div className="schedule-scroll"><table className="schedule-table"><thead><tr><th>Mensagem</th>{days.map(([day, label]) => <th key={day}>{label}</th>)}<th>Ativo</th></tr></thead><tbody>{messages.map((message) => <tr key={message.id}><td>{labels[message.kind as TemplateKind] || message.label}</td>{message.timeByWeekday ? <td colSpan={3} className="subtle">Horários por dia da semana ↓</td> : days.map(([day, label]) => <td key={day}><input type="time" aria-label={`${message.label} ${label}`} value={message.timeByDay[day] || ""} onChange={(event) => patchMessage(message.id, { timeByDay: { ...message.timeByDay, [day]: event.target.value } })} /></td>)}<td><input type="checkbox" aria-label={`Ativar ${message.label}`} checked={message.enabled} onChange={(event) => patchMessage(message.id, { enabled: event.target.checked })} /></td></tr>)}</tbody></table></div>
+          {messages.filter((message) => message.timeByWeekday).map((message) => <div className="weekday-schedule" key={message.id}><h3>{labels[message.kind as TemplateKind] || message.label}</h3><div>{weekdays.map(([day, label]) => <label key={day}>{label}<input type="time" aria-label={`${message.label} ${label}`} value={message.timeByWeekday?.[day] || ""} onChange={(event) => patchMessage(message.id, { timeByWeekday: { ...message.timeByWeekday, [day]: event.target.value } })} /></label>)}</div></div>)}
+        </div></details>
+        <details><summary>Modelos<ChevronDown size={16} /></summary><div className="settings-body"><div className="model-list">{Object.entries(labels).map(([kind, label]) => { const template = kind === "signal_up" ? selected.signalTemplates?.UP : kind === "signal_down" ? selected.signalTemplates?.DOWN : selected.messageTemplates?.[kind as MessageKind]; return <div key={kind}><span>{label}</span><span className={template ? "saved-model" : "subtle"}>{template ? "Salvo" : "Não capturado"}</span></div>; })}</div><div className="capture-controls"><label>Modelo<select value={captureKind} onChange={(event) => setCaptureKind(event.target.value as TemplateKind)}>{Object.entries(labels).map(([kind, label]) => <option value={kind} key={kind}>{label}</option>)}</select></label><button disabled={!!busy || captureSession?.status === "waiting"} onClick={startCapture}><Radio size={16} />{captureSession?.status === "waiting" ? "Aguardando mensagem…" : "Capturar modelo"}</button></div></div></details>
+        <details><summary>Avançado<ChevronDown size={16} /></summary><div className="settings-body fields-grid"><label>Chat ID<input value={selected.chatId || ""} onChange={(event) => patchProject({ chatId: event.target.value })} /></label><label>Token do bot<input type="password" autoComplete="new-password" value={selected.botToken || ""} placeholder={selected.botTokenConfigured ? "Configurado" : "Token"} onChange={(event) => patchProject({ botToken: event.target.value })} /></label></div></details>
+      </div>}
+    </main>
 
-      {tab === "config" && (
-        <section className="config-stack">
-          <div className="panel capture-panel">
-            <div className="config-card-head"><strong><Radio size={16} /> Captura de modelos</strong><span className="muted">{captureSession?.status === "waiting" ? "Aguardando mensagem no Telegram" : "Modelos ficam salvos por projeto"}</span></div>
-            <div className="capture-row">
-              <div className="field"><label>Projeto</label><select value={captureProject} onChange={(event) => setCaptureProject(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.language === "en" ? "Inglês" : "Espanhol"} · {project.name}</option>)}</select></div>
-              <div className="field"><label>Modelo</label><select value={captureKind} onChange={(event) => setCaptureKind(event.target.value as TemplateKind)}>{Object.entries(captureLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-              <button className="primary-button" disabled={busy || captureSession?.status === "waiting"} onClick={startCapture}>Capturar modelo</button>
-            </div>
-            <p className="muted capture-help">Clique uma vez, envie o exemplo no canal do projeto e aguarde a confirmação automática.</p>
-          </div>
-
-          {projects.map((project) => <details className="panel project-config" key={project.id} open><summary>{project.language === "en" ? "Inglês" : "Espanhol"} · {project.name}</summary>
-            <div className="form-grid">
-              <div className="field wide"><label>Nome do canal</label><input value={project.name} onChange={(event) => patchProject(project.id, { name: event.target.value })} /></div>
-              <div className="field"><label>Ativo</label><select value={project.enabled ? "yes" : "no"} onChange={(event) => patchProject(project.id, { enabled: event.target.value === "yes" })}><option value="yes">Sim</option><option value="no">Não</option></select></div>
-              <div className="field"><label>Chat ID</label><input value={project.chatId || ""} onChange={(event) => patchProject(project.id, { chatId: event.target.value })} placeholder="-100..." /></div>
-              <div className="field"><label>Token do bot</label><input value={project.botToken || ""} onChange={(event) => patchProject(project.id, { botToken: event.target.value })} placeholder={project.botTokenConfigured ? "Já configurado" : "Token"} /></div>
-              <div className="field wide"><label>Link do broker</label><input value={project.link} onChange={(event) => patchProject(project.id, { link: event.target.value })} /></div>
-              <div className="field"><label>Texto do botão</label><input value={project.brokerLabel} onChange={(event) => patchProject(project.id, { brokerLabel: event.target.value })} /></div>
-            </div>
-            <TemplateStatus project={project} />
-            <div className="standard-tests">
-              {messageKinds.map((kind) => <div className="standard-test" key={kind}>
-                <span>{captureLabels[kind]}</span>
-                <button disabled={busy || !project.chatId} onClick={() => sendStandardNow(project.id, kind)}><Send size={14} /> Enviar agora</button>
-              </div>)}
-            </div>
-          </details>)}
-
-          <details className="panel project-config" open><summary>Horários automáticos</summary>
-            <p className="muted">{workerLastSeen && Date.now() - Date.parse(workerLastSeen) < 120000 ? "Automático conectado" : "Automático sem confirmação recente"} · Horários de Brasília</p>
-            <div className="schedule-list">
-              {messages.map((message) => <div className="schedule-line" key={message.id}><strong>{message.label}</strong>{(["weekday", "saturday", "sunday"] as DayMode[]).map((day) => <div className="field" key={day}><label>{dayLabels[day]}</label><input value={message.timeByDay[day] || ""} onChange={(event) => patchMessageTime(message.id, day, event.target.value)} /></div>)}<label className="check"><input type="checkbox" checked={message.enabled} onChange={(event) => patchMessage(message.id, { enabled: event.target.checked })} /> Ativa</label></div>)}
-            </div>
-            <p className="muted">Boa noite usa a regra fixa por dia real de envio: terça a sábado 04:01, domingo 00:02, segunda 00:01.</p>
-          </details>
-        </section>
-      )}
-
-        {status && <p className="floating-status"><AlertTriangle size={16} /> {status}</p>}
-      </main>
-    </div>
-  );
-}
-
-function ErrorList({ errors }: { errors: SignalParseError[] }) {
-  return <div className="error-list">{errors.slice(0, 8).map((error) => <p key={`${error.lineNumber}-${error.line}`}><b>Linha {error.lineNumber}</b> {error.error}</p>)}</div>;
-}
-
-function TemplateStatus({ project }: { project: ProjectSettings }) {
-  return (
-    <div className="template-grid">
-      <span>Sinal CALL/BUY: {project.signalTemplates?.UP ? "salvo" : "faltando"}</span>
-      <span>Sinal PUT/SELL: {project.signalTemplates?.DOWN ? "salvo" : "faltando"}</span>
-      {messageKinds.map((kind) => <span key={kind}>{captureLabels[kind]}: {project.messageTemplates?.[kind] ? "salvo" : "faltando"}</span>)}
-    </div>
-  );
+    <dialog ref={dialogRef} className="import-dialog" onCancel={(event) => { if (busy === "import") event.preventDefault(); }} onClick={(event) => { if (event.target === event.currentTarget) closeImport(); }}>
+      <div className="dialog-heading"><h2>Importar lista</h2><button className="icon-button" aria-label="Fechar importação" title="Fechar" disabled={busy === "import"} onClick={closeImport}><X size={20} /></button></div>
+      <p className="import-context">{selected?.name}<span>{dateKey.split("-").reverse().join("/")}</span></p>
+      <textarea autoFocus aria-label="Lista de sinais" value={rawText} onChange={(event) => { setRawText(event.target.value); setReplaceWarning(""); setImportError(""); }} placeholder={"M5;AUDCAD-OTC;14:30;PUT\nM5;AUDNZD-OTC;14:45;CALL"} />
+      <div className="import-count">{parsed.signals.length} sinais reconhecidos</div>
+      {!!parsed.errors.length && <div className="inline-error" role="alert">{parsed.errors.slice(0, 5).map((error) => <p key={error.lineNumber}>Linha {error.lineNumber}: {error.error}</p>)}</div>}
+      {(importError || replaceWarning) && <p className="inline-error" role="alert">{importError || replaceWarning}</p>}
+      <footer><button disabled={busy === "import"} onClick={closeImport}>Cancelar</button><button className="primary" disabled={!!busy || !parsed.signals.length || !!parsed.errors.length} onClick={() => uploadList(!!replaceWarning)}>{busy === "import" ? <Loader2 size={16} className="spin" /> : <Import size={16} />}{replaceWarning ? "Substituir lista" : "Salvar lista"}</button></footer>
+    </dialog>
+    {notice && <div className={`toast ${notice.error ? "error" : "success"}`} role={notice.error ? "alert" : "status"}>{notice.error ? <AlertCircle size={18} /> : <Check size={18} />}<span>{notice.text}</span><button className="icon-button" aria-label="Fechar aviso" title="Fechar" onClick={() => setNotice(null)}><X size={16} /></button></div>}
+  </div>;
 }
