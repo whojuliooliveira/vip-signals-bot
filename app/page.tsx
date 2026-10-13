@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Smartphone, Sun, Sunrise, Trash2, UserRound, X } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, MessageSquareText, Moon, Power, Radio, Send, Settings, Smartphone, Sun, Sunrise, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSignalExpired, parseSignalInput, validateSignalTime } from "../lib/signals";
 import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
@@ -22,11 +22,8 @@ function shortProjectName(name: string) {
   return name.split("|")[0].replace(/💎/g, "").trim();
 }
 
-function projectReadiness(project: Project) {
-  if (!project.enabled) return { label: "Desativado", ready: false };
-  const destination = Boolean(project.chatId || project.telegramAccount?.targetPeer);
-  const sender = project.language === "es" ? project.telegramAccount?.sessionConfigured : project.botTokenConfigured || project.telegramAccount?.sessionConfigured;
-  return destination && sender ? { label: "Pronto", ready: true } : { label: "Ajustar", ready: false };
+function compactProjectName(name: string) {
+  return shortProjectName(name).split(/\s+/)[0] || "Canal";
 }
 
 async function requestJson(url: string, body?: unknown, method = "POST") {
@@ -37,7 +34,7 @@ async function requestJson(url: string, body?: unknown, method = "POST") {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState<"lista" | "config">("lista");
+  const [tab, setTab] = useState<"lista" | "mensagens" | "config">("lista");
   const [projects, setProjects] = useState<Project[]>([]);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [signals, setSignals] = useState<ScheduledSignal[]>([]);
@@ -86,7 +83,7 @@ export default function Home() {
     }
     return [...grouped.values()].sort((a, b) => b.dateKey.localeCompare(a.dateKey) || a.projectId.localeCompare(b.projectId));
   }, [signals]);
-  const recentLogs = logs.filter((log) => log.projectId === projectId).slice(0, 5);
+  const recentLogs = logs.filter((log) => log.projectId === projectId).slice(0, 12);
   const connected = Boolean(workerLastSeen && now - Date.parse(workerLastSeen) < 120000);
 
   async function loadConfig(initial = false) {
@@ -236,25 +233,30 @@ export default function Home() {
     finally { setBusy(""); actionPending.current = false; }
   }
 
+  const pageTitle = tab === "lista" ? "Lista do dia" : tab === "mensagens" ? "Mensagens e envios" : "Configurações";
+  const channelSelector = <fieldset className="channel-field"><legend>Canal</legend><div className="channel-tabs" role="group" aria-label="Canal">{projects.map((project) => <button type="button" key={project.id} className={project.id === projectId ? "active" : ""} aria-pressed={project.id === projectId} aria-label={`Canal ${compactProjectName(project.name)}`} disabled={loading || !!busy} onClick={() => setProjectId(project.id)}>{compactProjectName(project.name)}</button>)}</div></fieldset>;
+
   return <div className="console">
-    <header className="app-header">
+    <aside className="app-sidebar">
       <a className="brand" href="/" aria-label="DMS Sinais"><img src="/logo-dms-transparent.png" alt="DMS" /><span>SINAIS</span></a>
       <nav aria-label="Navegação principal">
-        <button className={tab === "lista" ? "selected" : ""} onClick={() => setTab("lista")}><ListChecks size={16} />Lista do dia</button>
-        <button className={tab === "config" ? "selected" : ""} onClick={() => setTab("config")}><Settings size={16} />Configurações</button>
+        <button className={tab === "lista" ? "selected" : ""} onClick={() => setTab("lista")}><ListChecks size={17} />Listas</button>
+        <button className={tab === "mensagens" ? "selected" : ""} onClick={() => setTab("mensagens")}><MessageSquareText size={17} />Mensagens</button>
+        <button className={tab === "config" ? "selected" : ""} onClick={() => setTab("config")}><Settings size={17} />Configurações</button>
       </nav>
-      <span className="header-timezone"><Clock3 size={14} /> Brasília · UTC−3</span>
-    </header>
-    <main>
-      <div className="page-heading"><h1>{tab === "lista" ? "Lista do dia" : "Configurações"}</h1>
-        <div className="connection-wrap"><button className={`connection ${connected ? "online" : "offline"}`} aria-expanded={workerDetail} onClick={() => setWorkerDetail(!workerDetail)}><span className="status-dot" />{loading ? "Verificando automático" : connected ? "Automático conectado" : "Automático sem confirmação"}<ChevronDown size={14} /></button>
+      <div className="sidebar-status">
+        <div className="connection-wrap"><button className={`connection ${connected ? "online" : "offline"}`} aria-expanded={workerDetail} onClick={() => setWorkerDetail(!workerDetail)}><span className="status-dot" />{loading ? "Verificando" : connected ? "Sistema online" : "Verificar sistema"}<ChevronDown size={14} /></button>
           {workerDetail && <div className="connection-detail" role="status">{workerLastSeen ? `Última atividade: ${timeInBrazil(workerLastSeen)} · ${dateInBrazil(new Date(workerLastSeen))}` : "Nenhuma atividade recente registrada."}<br />Horário de Brasília</div>}
         </div>
+        <span className="header-timezone"><Clock3 size={14} /> Brasília · UTC−3</span>
       </div>
-      <div className="toolbar">
-        <fieldset className="channel-field"><legend>Canal</legend><div className="channel-tabs" role="group" aria-label="Canal">{projects.map((project) => { const readiness = projectReadiness(project); return <button type="button" key={project.id} className={project.id === projectId ? "active" : ""} aria-pressed={project.id === projectId} aria-label={`Canal ${shortProjectName(project.name)}`} disabled={loading || !!busy} onClick={() => setProjectId(project.id)}><span>{shortProjectName(project.name)}</span><small className={readiness.ready ? "ready" : "attention"}><i />{readiness.label}</small></button>; })}</div></fieldset>
-        {tab === "lista" ? <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><div className="list-actions"><button ref={listsButtonRef} disabled={loading || !!busy} onClick={() => listsDialogRef.current?.showModal()}><CalendarDays size={16} />Listas salvas</button><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></div></> : <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}
-      </div>
+    </aside>
+    <main>
+      <div className="page-heading"><h1>{pageTitle}</h1>{tab === "config" && <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}</div>
+      {tab !== "config" && <div className="toolbar">
+        {channelSelector}
+        {tab === "lista" && <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><div className="list-actions"><button ref={listsButtonRef} disabled={loading || !!busy} onClick={() => listsDialogRef.current?.showModal()}><CalendarDays size={16} />Listas salvas</button><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></div></>}
+      </div>}
 
       {tab === "lista" ? <div className="workspace">
         <section className="signals-section" aria-label="Sinais da data">
@@ -278,18 +280,20 @@ export default function Home() {
             })}
           </tbody></table>}
         </section>
-        <aside className="activity-sidebar">
-          <section><h2>Mensagens padrão</h2><div className="standard-list">{standardKinds.map((kind) => { const Icon = messageIcons[kind]; return <div className="standard-row" key={kind}><Icon size={17} /><span>{labels[kind]}</span><button disabled={!!busy || (!selected?.chatId && !selected?.telegramAccount?.targetPeer)} onClick={() => sendStandardNow(kind)} aria-label={`Testar ${labels[kind]}`}>{busy === kind ? <Loader2 size={14} className="spin" /> : <Send size={14} />}Testar</button></div>; })}</div></section>
-          <section className="recent-section"><h2>Últimos envios</h2>{!recentLogs.length ? <p className="subtle">Nenhum envio registrado.</p> : <ol className="recent-list">{recentLogs.map((log) => <li key={log.id}><div className={`log-icon ${log.status}`}>{log.status === "sent" ? <Check size={14} /> : <AlertCircle size={14} />}</div><div><strong>{log.kind === "signal" ? log.label : labels[log.kind as TemplateKind] || log.label}</strong><span>{log.source === "manual" ? "Manual" : "Automático"} · {log.status === "sent" ? "Enviado" : "Erro"}</span>{log.error && <button className="error-link" onClick={() => setNotice({ text: log.error!, error: true })}>Ver erro</button>}</div><time title={new Date(log.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}>{timeInBrazil(log.at)}</time></li>)}</ol>}</section>
-        </aside>
-      </div> : selected && <div className="settings-sections" key={projectId}>
+      </div> : tab === "mensagens" ? <div className="messages-workspace">
+        <section className="standard-section"><div className="section-heading"><div><h2>Mensagens padrão</h2><p>Envie um teste no canal selecionado.</p></div></div><div className="standard-list">{standardKinds.map((kind) => { const Icon = messageIcons[kind]; return <div className="standard-row" key={kind}><Icon size={18} /><span>{labels[kind]}</span><button disabled={!!busy || (!selected?.chatId && !selected?.telegramAccount?.targetPeer)} onClick={() => sendStandardNow(kind)} aria-label={`Testar ${labels[kind]}`}>{busy === kind ? <Loader2 size={14} className="spin" /> : <Send size={14} />}Testar</button></div>; })}</div></section>
+        <section className="recent-section"><div className="section-heading"><div><h2>Últimos envios</h2><p>Sucessos e erros deste canal.</p></div></div>{!recentLogs.length ? <p className="subtle empty-log">Nenhum envio registrado.</p> : <ol className="recent-list">{recentLogs.map((log) => <li key={log.id}><div className={`log-icon ${log.status}`}>{log.status === "sent" ? <Check size={14} /> : <AlertCircle size={14} />}</div><div><strong>{log.kind === "signal" ? log.label : labels[log.kind as TemplateKind] || log.label}</strong><span>{log.source === "manual" ? "Manual" : "Automático"} · {log.status === "sent" ? "Enviado" : "Erro"}</span>{log.error && <button className="error-link" onClick={() => setNotice({ text: log.error!, error: true })}>Ver erro</button>}</div><time title={new Date(log.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}>{timeInBrazil(log.at)}</time></li>)}</ol>}</section>
+      </div> : selected && <div className="config-workspace" key={projectId}>
+        <aside className="config-channels"><span>Canal</span>{projects.map((project) => <button type="button" key={project.id} className={project.id === projectId ? "active" : ""} aria-pressed={project.id === projectId} aria-label={`Canal ${compactProjectName(project.name)}`} onClick={() => setProjectId(project.id)}><span>{compactProjectName(project.name)}</span><i className={project.enabled ? "on" : "off"} /></button>)}</aside>
+        <div className="config-content">
+          <div className="automation-control"><div><span>Automação do canal</span><strong>{selected.enabled ? "Ativa" : "Pausada"}</strong><small>{selected.enabled ? "Os disparos programados estão liberados." : "Nenhum disparo automático será feito."}</small></div><button type="button" role="switch" aria-checked={selected.enabled} aria-label={`${selected.enabled ? "Desativar" : "Ativar"} automação de ${compactProjectName(selected.name)}`} className={`power-toggle ${selected.enabled ? "active" : ""}`} onClick={() => patchProject({ enabled: !selected.enabled })}><Power size={18} />{selected.enabled ? "Desativar" : "Ativar"}</button></div>
+          <div className="settings-sections">
         <details open><summary>Canal e envio<ChevronDown size={16} /></summary><div className="settings-body fields-grid">
           <label className="wide">Nome<input value={selected.name} onChange={(event) => patchProject({ name: event.target.value })} /></label>
           <label>{selected.language === "es" ? "Canal de destino" : "Chat ID"}<input value={selected.chatId || ""} placeholder={selected.language === "es" ? "@canal ou -100..." : "-100..."} onChange={(event) => patchProject({ chatId: event.target.value })} /></label>
           {selected.language !== "es" && <label>Token do bot<input type="password" autoComplete="new-password" value={selected.botToken || ""} placeholder={selected.botTokenConfigured ? "Configurado" : "Cole o token do BotFather"} onChange={(event) => patchProject({ botToken: event.target.value })} /></label>}
           <label className="wide">Link do broker<input value={selected.link} onChange={(event) => patchProject({ link: event.target.value })} /></label>
           <label>Texto do botão<input value={selected.brokerLabel} onChange={(event) => patchProject({ brokerLabel: event.target.value })} /></label>
-          <label className="checkbox"><input type="checkbox" checked={selected.enabled} onChange={(event) => patchProject({ enabled: event.target.checked })} />Canal ativo</label>
         </div></details>
         <details open><summary>Conta Telegram deste canal<ChevronDown size={16} /></summary><div className="settings-body telegram-settings">
           <div className="telegram-account-row"><div className={`account-icon ${selected.telegramAccount?.sessionConfigured ? "connected" : ""}`}><UserRound size={19} /></div><div><strong>{selected.telegramAccount?.accountLabel || "Nenhuma conta conectada"}</strong><span>{selected.telegramAccount?.legacyFallback ? "Conta antiga do inglês · conecte aqui para separar" : selected.telegramAccount?.sessionConfigured ? "Conectada somente a este canal" : "Necessária para manter emojis personalizados"}</span></div><button onClick={openTelegramConnect}><Smartphone size={16} />{selected.telegramAccount?.sessionConfigured ? "Trocar conta" : "Conectar conta"}</button>{selected.telegramAccount?.status === "connected" && <button className="danger-text" disabled={!!busy} onClick={() => connectTelegram("disconnect")}>Desconectar</button>}</div>
@@ -299,6 +303,8 @@ export default function Home() {
           {messages.filter((message) => message.timeByWeekday).map((message) => <div className="weekday-schedule" key={message.id}><h3>{labels[message.kind as TemplateKind] || message.label}</h3><div>{weekdays.map(([day, label]) => <label key={day}>{label}<input type="time" aria-label={`${message.label} ${label}`} value={message.timeByWeekday?.[day] || ""} onChange={(event) => patchMessage(message.id, { timeByWeekday: { ...message.timeByWeekday, [day]: event.target.value } })} />{message.kind === "good_night" && <span>Retorno {goodNightReturnTime(day)}</span>}</label>)}</div></div>)}
         </div></details>
         <details><summary>Modelos<ChevronDown size={16} /></summary><div className="settings-body"><div className="model-list">{Object.keys(labels).map((kind) => { const template = kind === "signal_up" ? selected.signalTemplates?.UP : kind === "signal_down" ? selected.signalTemplates?.DOWN : selected.messageTemplates?.[kind as MessageKind]; return <div key={kind}><span>{templateLabel(kind as TemplateKind, selected.language)}</span><span className={template ? "saved-model" : "subtle"}>{template ? "Salvo" : "Não capturado"}</span></div>; })}</div><div className="capture-controls"><label>Modelo<select value={captureKind} onChange={(event) => setCaptureKind(event.target.value as TemplateKind)}>{Object.keys(labels).map((kind) => <option value={kind} key={kind}>{templateLabel(kind as TemplateKind, selected.language)}</option>)}</select></label><button disabled={!!busy || captureSession?.status === "waiting"} onClick={startCapture}><Radio size={16} />{captureSession?.status === "waiting" ? "Aguardando mensagem…" : "Capturar modelo"}</button></div></div></details>
+          </div>
+        </div>
       </div>}
     </main>
 

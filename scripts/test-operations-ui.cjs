@@ -92,11 +92,14 @@ async function main() {
     assert.equal(lastSend.time, "14:30");
     assert.equal(lastSend.kind, "signal");
     assert.match(await page.locator(".signals-table tbody tr").filter({ hasText: "AUD/CAD" }).innerText(), /Enviado/);
+    await page.getByRole("button", { name: "Mensagens", exact: true }).click();
+    assert.equal(await page.locator(".signals-table").count(), 0);
     for (const [label, kind] of [["Emoji de abertura", "morning_emoji"], ["Bom dia", "good_morning"], ["Início das análises", "analysis_start"], ["Boa noite", "good_night"]]) {
       await page.getByRole("button", { name: `Testar ${label}`, exact: true }).click();
       await page.getByRole("status").filter({ hasText: `${label} enviada ao canal` }).waitFor();
       assert.equal(lastSend.kind, kind);
     }
+    await page.getByRole("button", { name: "Listas", exact: true }).click();
     await page.getByRole("button", { name: "Importar lista", exact: true }).click();
     await page.getByLabel("Lista de sinais").fill("texto invalido");
     assert.equal(await page.getByRole("button", { name: "Salvar lista", exact: true }).isDisabled(), true);
@@ -105,15 +108,20 @@ async function main() {
     await page.getByRole("button", { name: "Substituir lista", exact: true }).click();
     await page.locator(".import-dialog").waitFor({ state: "hidden" });
     failSend = true;
+    await page.getByRole("button", { name: "Mensagens", exact: true }).click();
     await page.getByRole("button", { name: "Testar Bom dia", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "Falha simulada" }).waitFor();
     failSend = false;
     assert.equal(imported, 2);
+    await page.getByRole("button", { name: "Listas", exact: true }).click();
     await page.getByRole("button", { name: "Importar lista", exact: true }).click();
     await page.keyboard.press("Escape");
     await page.locator(".import-dialog").waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     assert.equal(await page.locator(".settings-sections > details[open]").count(), 2);
+    assert.equal(await page.getByRole("switch", { name: "Desativar automação de Tom", exact: true }).getAttribute("aria-checked"), "true");
+    await page.getByRole("switch", { name: "Desativar automação de Tom", exact: true }).click();
+    await page.getByRole("switch", { name: "Ativar automação de Tom", exact: true }).waitFor();
     await page.getByRole("button", { name: "Conectar conta", exact: true }).click();
     assert.equal(await page.getByLabel("API ID").count(), 0);
     assert.equal(await page.getByLabel("API Hash").count(), 0);
@@ -123,7 +131,7 @@ async function main() {
     await page.getByRole("button", { name: "Confirmar código", exact: true }).click();
     await page.locator(".telegram-dialog").waitFor({ state: "hidden" });
     await page.getByText("Tom Test (@tomtest)", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Canal José Álvarez", exact: true }).click();
+    await page.getByRole("button", { name: "Canal José", exact: true }).click();
     assert.equal(await page.getByLabel("Token do bot").count(), 0);
     assert.equal(await page.getByLabel("Canal de destino").getAttribute("placeholder"), "@canal ou -100...");
     assert.equal(await page.getByLabel("Forma de envio").inputValue(), "user");
@@ -131,9 +139,10 @@ async function main() {
     await page.locator("summary").filter({ hasText: "Automação" }).click();
     await page.getByText("Retorno 08:00", { exact: true }).waitFor();
     await page.getByText("Retorno 09:00", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Canal Tom Reed", exact: true }).click();
-    await page.getByRole("button", { name: "Lista do dia", exact: true }).click();
-    await page.getByRole("button", { name: "Fechar aviso" }).click();
+    await page.getByRole("button", { name: "Canal Tom", exact: true }).click();
+    await page.screenshot({ path: "data/operations-config-desktop.png", fullPage: true });
+    await page.getByRole("button", { name: "Listas", exact: true }).click();
+    if (await page.getByRole("button", { name: "Fechar aviso" }).count()) await page.getByRole("button", { name: "Fechar aviso" }).click();
     for (const [name, width, height] of [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]]) {
       await page.setViewportSize({ width, height });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Overflow ${name}`);
