@@ -16,6 +16,18 @@ const standardKinds = ["morning_emoji", "good_morning", "analysis_start", "good_
 const messageIcons = { morning_emoji: Sunrise, good_morning: Sun, analysis_start: Radio, good_night: Moon };
 const days: [DayMode, string][] = [["weekday", "Seg–Sex"], ["saturday", "Sábado"], ["sunday", "Domingo"]];
 const weekdays: [Weekday, string][] = [["monday", "Seg"], ["tuesday", "Ter"], ["wednesday", "Qua"], ["thursday", "Qui"], ["friday", "Sex"], ["saturday", "Sáb"], ["sunday", "Dom"]];
+const goodNightReturnTime = (day: Weekday) => day === "saturday" ? "08:00" : day === "sunday" ? "09:00" : "07:00";
+
+function shortProjectName(name: string) {
+  return name.split("|")[0].replace(/💎/g, "").trim();
+}
+
+function projectReadiness(project: Project) {
+  if (!project.enabled) return { label: "Desativado", ready: false };
+  const destination = Boolean(project.chatId || project.telegramAccount?.targetPeer);
+  const sender = project.language === "es" ? project.telegramAccount?.sessionConfigured : project.botTokenConfigured || project.telegramAccount?.sessionConfigured;
+  return destination && sender ? { label: "Pronto", ready: true } : { label: "Ajustar", ready: false };
+}
 
 async function requestJson(url: string, body?: unknown, method = "POST") {
   const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -240,7 +252,7 @@ export default function Home() {
         </div>
       </div>
       <div className="toolbar">
-        <label className="channel-field">Canal<select value={projectId} disabled={loading || !!busy} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+        <fieldset className="channel-field"><legend>Canal</legend><div className="channel-tabs" role="group" aria-label="Canal">{projects.map((project) => { const readiness = projectReadiness(project); return <button type="button" key={project.id} className={project.id === projectId ? "active" : ""} aria-pressed={project.id === projectId} aria-label={`Canal ${shortProjectName(project.name)}`} disabled={loading || !!busy} onClick={() => setProjectId(project.id)}><span>{shortProjectName(project.name)}</span><small className={readiness.ready ? "ready" : "attention"}><i />{readiness.label}</small></button>; })}</div></fieldset>
         {tab === "lista" ? <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><div className="list-actions"><button ref={listsButtonRef} disabled={loading || !!busy} onClick={() => listsDialogRef.current?.showModal()}><CalendarDays size={16} />Listas salvas</button><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></div></> : <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}
       </div>
 
@@ -284,7 +296,7 @@ export default function Home() {
           <div className="fields-grid telegram-options"><label>Forma de envio<select disabled={selected.language === "es"} value={selected.language === "es" ? "user" : selected.telegramAccount?.sendMode || "auto"} onChange={(event) => patchTelegram({ sendMode: event.target.value as TelegramAccountView["sendMode"] })}><option value="auto">Automático</option><option value="bot">Somente bot</option><option value="user">Somente conta Telegram</option></select></label><label>Destino alternativo <span className="optional">opcional</span><input value={selected.telegramAccount?.targetPeer || ""} placeholder="@canal ou ID" onChange={(event) => patchTelegram({ targetPeer: event.target.value })} /></label></div>
         </div></details>
         <details><summary>Automação<ChevronDown size={16} /></summary><div className="settings-body"><div className="schedule-scroll"><table className="schedule-table"><thead><tr><th>Mensagem</th>{days.map(([day, label]) => <th key={day}>{label}</th>)}<th>Ativo</th></tr></thead><tbody>{messages.map((message) => <tr key={message.id}><td>{labels[message.kind as TemplateKind] || message.label}</td>{message.timeByWeekday ? <td colSpan={3} className="subtle">Horários por dia da semana ↓</td> : days.map(([day, label]) => <td key={day}><input type="time" aria-label={`${message.label} ${label}`} value={message.timeByDay[day] || ""} onChange={(event) => patchMessage(message.id, { timeByDay: { ...message.timeByDay, [day]: event.target.value } })} /></td>)}<td><input type="checkbox" aria-label={`Ativar ${message.label}`} checked={message.enabled} onChange={(event) => patchMessage(message.id, { enabled: event.target.checked })} /></td></tr>)}</tbody></table></div>
-          {messages.filter((message) => message.timeByWeekday).map((message) => <div className="weekday-schedule" key={message.id}><h3>{labels[message.kind as TemplateKind] || message.label}</h3><div>{weekdays.map(([day, label]) => <label key={day}>{label}<input type="time" aria-label={`${message.label} ${label}`} value={message.timeByWeekday?.[day] || ""} onChange={(event) => patchMessage(message.id, { timeByWeekday: { ...message.timeByWeekday, [day]: event.target.value } })} /></label>)}</div></div>)}
+          {messages.filter((message) => message.timeByWeekday).map((message) => <div className="weekday-schedule" key={message.id}><h3>{labels[message.kind as TemplateKind] || message.label}</h3><div>{weekdays.map(([day, label]) => <label key={day}>{label}<input type="time" aria-label={`${message.label} ${label}`} value={message.timeByWeekday?.[day] || ""} onChange={(event) => patchMessage(message.id, { timeByWeekday: { ...message.timeByWeekday, [day]: event.target.value } })} />{message.kind === "good_night" && <span>Retorno {goodNightReturnTime(day)}</span>}</label>)}</div></div>)}
         </div></details>
         <details><summary>Modelos<ChevronDown size={16} /></summary><div className="settings-body"><div className="model-list">{Object.keys(labels).map((kind) => { const template = kind === "signal_up" ? selected.signalTemplates?.UP : kind === "signal_down" ? selected.signalTemplates?.DOWN : selected.messageTemplates?.[kind as MessageKind]; return <div key={kind}><span>{templateLabel(kind as TemplateKind, selected.language)}</span><span className={template ? "saved-model" : "subtle"}>{template ? "Salvo" : "Não capturado"}</span></div>; })}</div><div className="capture-controls"><label>Modelo<select value={captureKind} onChange={(event) => setCaptureKind(event.target.value as TemplateKind)}>{Object.keys(labels).map((kind) => <option value={kind} key={kind}>{templateLabel(kind as TemplateKind, selected.language)}</option>)}</select></label><button disabled={!!busy || captureSession?.status === "waiting"} onClick={startCapture}><Radio size={16} />{captureSession?.status === "waiting" ? "Aguardando mensagem…" : "Capturar modelo"}</button></div></div></details>
       </div>}

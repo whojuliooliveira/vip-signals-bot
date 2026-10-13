@@ -35,7 +35,16 @@ main { width: 100%; max-width: 1800px; margin: 0 auto; padding: 32px 36px 60px; 
 .status-dot { width: 6px; height: 6px; background: currentColor; border-radius: 50%; flex-shrink: 0; }
 .connection-detail { position: absolute; z-index: 5; right: 0; top: calc(100% + 8px); width: 275px; max-width: calc(100vw - 32px); border: 1px solid var(--line); border-radius: 6px; background: #252929; padding: 14px; font-size: 12px; color: var(--muted); box-shadow: 0 10px 32px #0006; }
 .toolbar { display: flex; align-items: flex-end; gap: 14px; padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
-.channel-field { width: min(420px, 100%); }
+.channel-field { width: min(500px, 100%); padding: 0; border: 0; margin: 0; }
+.channel-field legend { color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+.channel-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 3px; border-radius: 6px; background: #1e2121; }
+.channel-tabs button { min-height: 45px; border-color: transparent; background: transparent; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; overflow: hidden; }
+.channel-tabs button.active { border-color: #4d5a57; background: #343a39; }
+.channel-tabs button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.channel-tabs small { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.channel-tabs small i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.channel-tabs small.ready { color: var(--green); }
+.channel-tabs small.attention { color: #e8bd79; }
 .date-field { width: 168px; flex-shrink: 0; }
 .list-actions { margin-left: auto; display: flex; gap: 10px; }
 .import-button { min-height: 40px; }
@@ -117,6 +126,7 @@ summary::-webkit-details-marker { display: none; }
 .weekday-schedule { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; }
 .weekday-schedule > div { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .weekday-schedule input { padding: 7px; font-size: 12px; }
+.weekday-schedule label > span { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .model-list { max-width: 650px; }
 .model-list > div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #292e2e; font-size: 13px; }
 .saved-model { color: var(--green); font-size: 12px; }
@@ -183,6 +193,8 @@ summary::-webkit-details-marker { display: none; }
   .connection-detail { left: 0; right: auto; }
   .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 145px; gap: 14px 10px; }
   .channel-field { grid-column: 1 / -1; width: 100%; }
+  .channel-tabs button { min-height: 52px; align-items: flex-start; flex-direction: column; gap: 3px; }
+  .channel-tabs button > span { width: 100%; text-align: left; }
   .date-field { width: 100%; grid-column: 1 / -1; }
   .list-actions { width: 100%; margin-left: 0; grid-column: 1 / -1; }
   .list-actions button { flex: 1; }

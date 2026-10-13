@@ -4,7 +4,7 @@ const baseUrl = process.env.UI_TEST_URL || "http://127.0.0.1:5187";
 const dateKey = "2026-10-13";
 const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false, sharedCredentialsConfigured: true } };
 const spanishProject = { id: "expert_a", name: "José Álvarez | Señales VIP", enabled: true, language: "es", chatId: "", botTokenConfigured: false, link: "https://example.es", brokerLabel: "Haz clic aquí", telegramAccount: { sendMode: "user", targetPeer: "@senalesvip", status: "connected", sessionConfigured: true, sharedCredentialsConfigured: true, accountLabel: "Cuenta Test" } };
-const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
+const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" }, ...(kind === "good_night" ? { timeByWeekday: { monday: "00:01", tuesday: "04:01", wednesday: "04:01", thursday: "04:01", friday: "04:01", saturday: "04:01", sunday: "00:02" } } : {}) }));
 const signals = [
   { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
   { id: "one", time: "14:30", pair: "AUD/CAD", direction: "DOWN" },
@@ -123,12 +123,15 @@ async function main() {
     await page.getByRole("button", { name: "Confirmar código", exact: true }).click();
     await page.locator(".telegram-dialog").waitFor({ state: "hidden" });
     await page.getByText("Tom Test (@tomtest)", { exact: true }).waitFor();
-    await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_a");
+    await page.getByRole("button", { name: "Canal José Álvarez", exact: true }).click();
     assert.equal(await page.getByLabel("Token do bot").count(), 0);
     assert.equal(await page.getByLabel("Canal de destino").getAttribute("placeholder"), "@canal ou -100...");
     assert.equal(await page.getByLabel("Forma de envio").inputValue(), "user");
     assert.equal(await page.getByLabel("Forma de envio").isDisabled(), true);
-    await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_b");
+    await page.locator("summary").filter({ hasText: "Automação" }).click();
+    await page.getByText("Retorno 08:00", { exact: true }).waitFor();
+    await page.getByText("Retorno 09:00", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Canal Tom Reed", exact: true }).click();
     await page.getByRole("button", { name: "Lista do dia", exact: true }).click();
     await page.getByRole("button", { name: "Fechar aviso" }).click();
     for (const [name, width, height] of [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]]) {
