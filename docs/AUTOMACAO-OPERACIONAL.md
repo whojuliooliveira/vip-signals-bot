@@ -221,6 +221,8 @@ Cada mensagem pode ser ativada/desativada e ter horario proprio. Os valores inic
 
 Boa noite usa configuracao individual por dia da semana. As configuracoes salvas no painel/Supabase prevalecem sobre os valores iniciais do codigo.
 
+O horario de retorno escrito dentro do modelo de boa noite e dinamico pelo dia do disparo em Brasilia: segunda a sexta informa `7 a.m UTC-3`, sabado informa `8 a.m UTC-3` e domingo informa `9 a.m UTC-3`. A troca acontece no envio e preserva o restante do modelo capturado.
+
 ### Como a agenda das mensagens funciona
 
 Em cada ciclo, o sistema:

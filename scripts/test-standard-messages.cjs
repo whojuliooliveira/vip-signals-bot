@@ -5,7 +5,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileMo
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
 }).outputText, filename);
 const { dayMode, localWeekday, localDateKey, defaultMessages } = require("../lib/store.ts");
-const { standardMessagePayload } = require("../lib/standardMessages.ts");
+const { goodNightReturnHour, standardMessagePayload } = require("../lib/standardMessages.ts");
 const { directionText, renderSavedSignalTemplate, renderSignal } = require("../lib/templates.ts");
 assert.equal(dayMode(new Date("2026-10-11T02:30:00Z")), "saturday");
 assert.equal(dayMode(new Date("2026-10-11T03:00:00Z")), "sunday");
@@ -17,6 +17,14 @@ assert.match(renderSignal({ locale: "es", title: "Test", pair: "AUD/CAD", market
 assert.match(renderSignal({ locale: "es", title: "Test", pair: "AUD/CAD", market: "OTC", direction: "DOWN", time: "14:30", expiryMinutes: 5, reentries: 2, brokerLink: "https://example.com", brokerLabel: "Abrir", includeInlineButton: true }).text, /ABAJO/);
 const legacySpanish = renderSavedSignalTemplate({ id: "legacy", kind: "signal_up", html: "", text: "{{pair}} ({{market}}) · {{direction}} · HH:MM", entities: [], capturedAt: new Date().toISOString() }, { locale: "es", title: "Test", pair: "USD/ARS", market: "OTC", direction: "UP", time: "16:30", expiryMinutes: 5, reentries: 2, brokerLink: "https://example.com", brokerLabel: "Abrir", includeInlineButton: true });
 assert.equal(legacySpanish.text, "USD/ARS (OTC) · ARRIBA · 16:30");
+assert.equal(goodNightReturnHour(new Date("2026-10-17T07:01:00Z")), 8);
+assert.equal(goodNightReturnHour(new Date("2026-10-18T03:02:00Z")), 9);
+assert.equal(goodNightReturnHour(new Date("2026-10-19T03:01:00Z")), 7);
+const goodNight = defaultMessages.find((message) => message.kind === "good_night");
+const spanishGoodNightProject = { id: "es", chatId: "-100456", name: "Jose", language: "es", link: "https://example.com", brokerLabel: "Abrir", messageTemplates: { good_night: { text: "Retomamos a las 7 a.m UTC-3.", entities: [], buttons: [] } } };
+assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-17T07:01:00Z")).text, /8 a\.m UTC-3/);
+assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-18T03:02:00Z")).text, /9 a\.m UTC-3/);
+assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-19T03:01:00Z")).text, /7 a\.m UTC-3/);
 const project = { id: "test", chatId: "-100123", name: "Test", language: "en", link: "https://example.com", brokerLabel: "Link", messageTemplates: {} };
 for (const message of defaultMessages) {
   const template = { text: "Good morning!", entities: [{ type: "bold", offset: 0, length: 4 }], buttons: [[{ text: "Original", url: "https://example.org" }]] };
