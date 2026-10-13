@@ -53,6 +53,10 @@ async function main() {
     assert.match(await page.locator(".signals-table tbody tr").innerText(), /Expirado/);
     await page.getByLabel("Data da lista").fill(dateKey);
     assert.equal(await page.locator("textarea:visible").count(), 0);
+    await page.getByRole("button", { name: "Próximos", exact: true }).click();
+    assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
+    assert.match(await page.locator(".signals-table tbody tr").innerText(), /AUD\/CAD/);
+    assert.match(await page.locator(".signals-table tbody tr").innerText(), /Aguardando/);
     await page.getByRole("button", { name: "Manuais", exact: true }).click();
     assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
     await page.getByRole("button", { name: "Automáticos", exact: true }).click();
@@ -94,7 +98,7 @@ async function main() {
       await page.screenshot({ path: `data/operations-${name}.png`, fullPage: true });
     }
     assert.deepEqual(errors, []);
-    console.log("PASS: filters, signal send, four message tests, import replacement, modal Escape, collapsed settings, desktop/tablet/mobile");
+    console.log("PASS: upcoming filter, signal send, four message tests, import replacement, modal Escape, collapsed settings, desktop/tablet/mobile");
   } finally { await browser.close(); }
 }
 main().catch((error) => { console.error(error); process.exit(1); });

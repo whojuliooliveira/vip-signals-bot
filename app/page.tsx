@@ -30,7 +30,7 @@ export default function Home() {
   const [logs, setLogs] = useState<SendLog[]>([]);
   const [projectId, setProjectId] = useState("expert_b");
   const [dateKey, setDateKey] = useState(() => dateInBrazil());
-  const [filter, setFilter] = useState<"all" | "auto" | "manual">("all");
+  const [filter, setFilter] = useState<"all" | "upcoming" | "auto" | "manual">("all");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -52,8 +52,9 @@ export default function Home() {
   const selected = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
   const automatic = (signal: ScheduledSignal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time);
+  const upcoming = (signal: ScheduledSignal) => automatic(signal) && !signal.sentAt && !signal.error && !manualResults[signal.id]?.sent && !manualResults[signal.id]?.error && !isSignalExpired(signal.dateKey, signal.time, new Date(now));
   const dailySignals = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey).sort((a, b) => a.time.localeCompare(b.time) || a.pair.localeCompare(b.pair)), [signals, projectId, dateKey]);
-  const visibleSignals = dailySignals.filter((signal) => filter === "all" || (filter === "auto" ? automatic(signal) : !automatic(signal)));
+  const visibleSignals = dailySignals.filter((signal) => filter === "all" || (filter === "upcoming" ? upcoming(signal) : filter === "auto" ? automatic(signal) : !automatic(signal)));
   const recentLogs = logs.filter((log) => log.projectId === projectId).slice(0, 5);
   const connected = Boolean(workerLastSeen && now - Date.parse(workerLastSeen) < 120000);
 
@@ -188,7 +189,7 @@ export default function Home() {
 
       {tab === "lista" ? <div className="workspace">
         <section className="signals-section" aria-label="Sinais da data">
-          <div className="list-heading"><div className="filters" role="group" aria-label="Filtrar sinais">{([["all", "Todos"], ["auto", "Automáticos"], ["manual", "Manuais"]] as const).map(([value, label]) => <button aria-pressed={filter === value} className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)}>{label}</button>)}</div><span className="count">{visibleSignals.length} sinais</span></div>
+          <div className="list-heading"><div className="filters" role="group" aria-label="Filtrar sinais">{([["all", "Todos"], ["upcoming", "Próximos"], ["auto", "Automáticos"], ["manual", "Manuais"]] as const).map(([value, label]) => <button aria-pressed={filter === value} className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)}>{label}</button>)}</div><span className="count">{visibleSignals.length} sinais</span></div>
           {loading ? <div className="empty"><Loader2 className="spin" size={22} /><p>Carregando sinais…</p></div> : visibleSignals.length === 0 ? <div className="empty"><ListChecks size={28} /><h2>{dailySignals.length ? "Nenhum sinal neste filtro" : "Nenhum sinal nesta data"}</h2>{!dailySignals.length && <button onClick={openImport}><Import size={16} />Importar lista</button>}</div> : <table className="signals-table"><thead><tr><th>Horário</th><th>Ativo</th><th>Direção</th><th>Automático</th><th>Status</th><th><span className="sr-only">Enviar</span></th></tr></thead><tbody>
             {visibleSignals.map((signal) => {
               const isAuto = automatic(signal);
