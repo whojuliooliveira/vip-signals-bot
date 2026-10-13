@@ -45,6 +45,10 @@ async function main() {
     await page.goto(baseUrl);
     await page.getByLabel("Data da lista").fill(dateKey);
     await page.locator(".signals-table tbody tr").first().waitFor();
+    assert.equal(await page.getByRole("button", { name: "Próximos", exact: true }).getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
+    assert.match(await page.locator(".signals-table tbody tr").innerText(), /AUD\/CAD/);
+    await page.getByRole("button", { name: "Todos", exact: true }).click();
     assert.equal(await page.locator(".signals-table tbody tr").count(), 4);
     assert.match(await page.locator(".signals-table tbody tr").first().innerText(), /Expirado/);
     await page.getByLabel("Data da lista").fill("2026-10-14");
@@ -53,15 +57,8 @@ async function main() {
     assert.match(await page.locator(".signals-table tbody tr").innerText(), /Expirado/);
     await page.getByLabel("Data da lista").fill(dateKey);
     assert.equal(await page.locator("textarea:visible").count(), 0);
-    await page.getByRole("button", { name: "Próximos", exact: true }).click();
-    assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
-    assert.match(await page.locator(".signals-table tbody tr").innerText(), /AUD\/CAD/);
-    assert.match(await page.locator(".signals-table tbody tr").innerText(), /Aguardando/);
-    await page.getByRole("button", { name: "Manuais", exact: true }).click();
-    assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
-    await page.getByRole("button", { name: "Automáticos", exact: true }).click();
-    assert.equal(await page.locator(".signals-table tbody tr").count(), 3);
-    await page.getByRole("button", { name: "Todos", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "Automáticos", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Manuais", exact: true }).count(), 0);
     await page.getByRole("button", { name: "Enviar agora AUD/CAD 14:30", exact: true }).click();
     await page.getByRole("status").filter({ hasText: "enviado" }).waitFor();
     assert.equal(lastSend.projectId, "expert_b");
