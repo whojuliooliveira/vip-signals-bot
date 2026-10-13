@@ -52,17 +52,25 @@ export async function POST(request: NextRequest) {
     for (const project of body.projects) {
       const current = byId.get(project.id);
       if (!current) continue;
+      const telegramAccount = current.telegramAccount
+        ? {
+            ...current.telegramAccount,
+            sendMode: project.telegramAccount?.sendMode || current.telegramAccount.sendMode || "auto",
+            targetPeer: project.telegramAccount?.targetPeer ?? current.telegramAccount.targetPeer,
+          }
+        : project.telegramAccount?.legacyFallback
+          ? undefined
+          : {
+              sendMode: project.telegramAccount?.sendMode || "auto",
+              targetPeer: project.telegramAccount?.targetPeer,
+            };
       byId.set(project.id, {
         ...current,
         ...project,
         botToken: project.botToken ? project.botToken : current.botToken,
         signalTemplates: current.signalTemplates,
         messageTemplates: current.messageTemplates,
-        telegramAccount: {
-          ...current.telegramAccount,
-          sendMode: project.telegramAccount?.sendMode || current.telegramAccount?.sendMode || "auto",
-          targetPeer: project.telegramAccount?.targetPeer ?? current.telegramAccount?.targetPeer,
-        },
+        telegramAccount,
       });
     }
     store.projects = Array.from(byId.values());
