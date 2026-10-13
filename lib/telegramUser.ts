@@ -1,31 +1,48 @@
 import type { SendTelegramMessage } from "./telegram";
+import type { TelegramAccountSettings } from "./store";
 import { toTelegramUserEntities } from "./telegramEntities";
+import { createHash } from "node:crypto";
 
 type TelegramClientType = import("telegram").TelegramClient;
 
-let clientPromise: Promise<TelegramClientType> | null = null;
+const clientPromises = new Map<string, Promise<TelegramClientType>>();
 
-export function isTelegramUserSenderConfigured() {
-  return Boolean(
-    process.env.TELEGRAM_API_ID
-      && process.env.TELEGRAM_API_HASH
-      && (process.env.TELEGRAM_STRING_SESSION || process.env.TELEGRAM_SESSION),
-  );
+export function telegramUserCredentials(account?: TelegramAccountSettings) {
+  if (account) {
+    return {
+      apiId: account.apiId || "",
+      apiHash: account.apiHash || "",
+      stringSession: account.stringSession || "",
+      targetPeer: account.targetPeer || "",
+    };
+  }
+  return {
+    apiId: process.env.TELEGRAM_API_ID || "",
+    apiHash: process.env.TELEGRAM_API_HASH || "",
+    stringSession: process.env.TELEGRAM_STRING_SESSION || process.env.TELEGRAM_SESSION || "",
+    targetPeer: process.env.TELEGRAM_TARGET_PEER || "",
+  };
 }
 
-export function canUseTelegramUserSender(payload: SendTelegramMessage) {
-  if (!isTelegramUserSenderConfigured()) return false;
+export function isTelegramUserSenderConfigured(account?: TelegramAccountSettings) {
+  const credentials = telegramUserCredentials(account);
+  return Boolean(credentials.apiId && credentials.apiHash && credentials.stringSession);
+}
+
+export function canUseTelegramUserSender(payload: SendTelegramMessage, account?: TelegramAccountSettings) {
+  if (!isTelegramUserSenderConfigured(account)) return false;
   if (payload.media) return false;
   return true;
 }
 
-export async function sendTelegramUserMessage(payload: SendTelegramMessage) {
-  if (!canUseTelegramUserSender(payload)) {
+export async function sendTelegramUserMessage(payload: SendTelegramMessage, account?: TelegramAccountSettings) {
+  if (!canUseTelegramUserSender(payload, account)) {
     throw new Error("Sender Telegram por conta nao configurado ou payload incompativel.");
   }
 
-  const client = await getTelegramUserClient();
-  const entity = await resolveTargetEntity(client, payload.chatId, payload.chatTitle);
+  const credentials = telegramUserCredentials(account);
+  const client = await getTelegramUserClient(account);
+  const entity = await resolveTargetEntity(client, payload.chatId, payload.chatTitle, credentials.targetPeer);
   const message = payload.entities !== undefined ? payload.text : withFallbackTextLink(payload.text, payload);
 
   const sent = await client.sendMessage(entity, {
@@ -47,15 +64,18 @@ export async function sendTelegramUserMessage(payload: SendTelegramMessage) {
   return { message_id: Number(sent.id), transport: "telegram_user" };
 }
 
-async function getTelegramUserClient() {
-  if (clientPromise) return clientPromise;
+async function getTelegramUserClient(account?: TelegramAccountSettings) {
+  const credentials = telegramUserCredentials(account);
+  const key = createHash("sha256").update(`${credentials.apiId}:${credentials.stringSession}`).digest("hex");
+  const existing = clientPromises.get(key);
+  if (existing) return existing;
 
-  clientPromise = (async () => {
+  const promise = (async () => {
     const { TelegramClient } = await import("telegram");
     const { StringSession } = await import("telegram/sessions/index.js");
-    const session = new StringSession(process.env.TELEGRAM_STRING_SESSION || process.env.TELEGRAM_SESSION || "");
-    const apiId = Number(process.env.TELEGRAM_API_ID);
-    const apiHash = process.env.TELEGRAM_API_HASH || "";
+    const session = new StringSession(credentials.stringSession);
+    const apiId = Number(credentials.apiId);
+    const apiHash = credentials.apiHash;
     if (!Number.isFinite(apiId) || !apiHash) throw new Error("TELEGRAM_API_ID/TELEGRAM_API_HASH invalidos.");
 
     const client = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5, useWSS: true });
@@ -65,12 +85,13 @@ async function getTelegramUserClient() {
     }
     return client;
   })();
+  clientPromises.set(key, promise);
+  promise.catch(() => clientPromises.delete(key));
 
-  return clientPromise;
+  return promise;
 }
 
-async function resolveTargetEntity(client: TelegramClientType, chatId: string, chatTitle?: string) {
-  const override = process.env.TELEGRAM_TARGET_PEER || "";
+async function resolveTargetEntity(client: TelegramClientType, chatId: string, chatTitle?: string, override = "") {
   if (override) return client.getEntity(override);
 
   const expectedId = normalizeBotChatId(chatId);

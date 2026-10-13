@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         buttons: body.kind === "custom" ? undefined : project.signalTemplates?.[String(body.direction || "DOWN") as Direction]?.buttons,
         buttonText: body.kind === "custom" && body.includeInlineButton ? project.brokerLabel : undefined,
         buttonUrl: body.kind === "custom" && body.includeInlineButton ? project.link : undefined,
-      });
+      }, project.telegramAccount);
       await appendLog({
         id: uid("log"),
         at: new Date().toISOString(),

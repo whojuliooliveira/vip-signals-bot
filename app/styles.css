@@ -92,6 +92,22 @@ summary::-webkit-details-marker { display: none; }
 .settings-body { padding: 4px 0 26px; }
 .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 750px; }
 .fields-grid .wide { grid-column: 1 / -1; }
+.telegram-settings { max-width: 850px; }
+.telegram-account-row { min-height: 62px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 0 18px; }
+.telegram-account-row strong, .telegram-account-row span { display: block; }
+.telegram-account-row strong { font-size: 14px; }
+.telegram-account-row span { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.account-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); background: #242827; border: 1px solid var(--line); }
+.account-icon.connected { color: var(--green); background: #183027; border-color: #315f4c; }
+.danger-text { color: #ffaaa2; }
+.telegram-options { padding-top: 16px; border-top: 1px solid var(--line); }
+.optional { color: var(--muted); font-size: 10px; font-weight: 400; }
+.telegram-dialog { color: var(--text); background: #1b1e1e; padding: 24px; border: 1px solid #454d4b; border-radius: 8px; width: min(520px, calc(100vw - 32px)); }
+.telegram-dialog::backdrop { background: #000b; }
+.telegram-dialog .dialog-heading p { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
+.telegram-form { display: grid; gap: 14px; margin-top: 24px; }
+.telegram-form > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.telegram-dialog footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .checkbox { display: flex; gap: 10px; align-items: center; align-self: end; min-height: 40px; }
 .schedule-scroll { overflow-x: auto; }
 .schedule-table { width: 100%; text-align: left; border-collapse: collapse; font-size: 13px; }
@@ -192,6 +208,9 @@ summary::-webkit-details-marker { display: none; }
   .standard-row { min-height: 56px; }
   .standard-row button { min-height: 36px; padding: 6px 12px; }
   .fields-grid { grid-template-columns: 1fr; }
+  .fields-grid .wide { grid-column: auto; }
+  .telegram-account-row { grid-template-columns: 42px minmax(0, 1fr); }
+  .telegram-account-row button { grid-column: 1 / -1; width: 100%; }
   .schedule-table { min-width: 520px; }
   .weekday-schedule > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weekday-schedule input { font-size: 16px; }
@@ -200,6 +219,7 @@ summary::-webkit-details-marker { display: none; }
   .import-dialog { padding: 18px; }
   .import-dialog textarea { font-size: 16px; }
   .saved-lists-dialog { padding: 18px; }
+  .telegram-dialog { padding: 18px; }
   .saved-list-row { grid-template-columns: 1fr; gap: 10px; }
   .saved-list-actions button { flex: 1; }
   .toast { bottom: 16px; right: 16px; }

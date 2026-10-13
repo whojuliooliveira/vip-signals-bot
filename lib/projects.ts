@@ -1,5 +1,5 @@
 import type { Locale } from "./templates";
-import { loadStore, type CapturedTemplate, type MessageKind } from "./store";
+import { loadStore, type CapturedTemplate, type MessageKind, type TelegramAccountSettings } from "./store";
 
 export type ProjectConfig = {
   id: string;
@@ -14,6 +14,7 @@ export type ProjectConfig = {
     DOWN?: CapturedTemplate;
   };
   messageTemplates?: Partial<Record<MessageKind, CapturedTemplate>>;
+  telegramAccount?: TelegramAccountSettings;
 };
 
 function project(prefix: "PROJECT_1" | "PROJECT_2"): ProjectConfig {
@@ -55,6 +56,7 @@ export async function getProjectsConfig(): Promise<ProjectConfig[]> {
       brokerLabel: saved?.brokerLabel || envProject.brokerLabel,
       signalTemplates: saved?.signalTemplates,
       messageTemplates: saved?.messageTemplates,
+      telegramAccount: saved?.telegramAccount || (envProject.id === "expert_b" ? undefined : { sendMode: "auto" }),
     };
   });
 }
@@ -75,5 +77,6 @@ export async function getProjectConfig(id: string): Promise<ProjectConfig | unde
     brokerLabel: saved.brokerLabel,
     signalTemplates: saved.signalTemplates,
     messageTemplates: saved.messageTemplates,
+    telegramAccount: saved.telegramAccount,
   };
 }

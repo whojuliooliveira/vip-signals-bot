@@ -51,7 +51,7 @@ async function runSchedule(request: NextRequest) {
 
       const body = message.textByLanguage[project.language] || message.textByLanguage.en || message.textByLanguage.es || "";
       try {
-        const sent = await sendTelegramMessage(project.botToken, standardMessagePayload(project, message));
+        const sent = await sendTelegramMessage(project.botToken, standardMessagePayload(project, message), project.telegramAccount);
 
         store.sentScheduleKeys.push(key);
         const log: SendLog = {
@@ -120,7 +120,7 @@ async function runSchedule(request: NextRequest) {
         entities: message.entities,
         media: project.signalTemplates?.[signal.direction]?.media,
         buttons: project.signalTemplates?.[signal.direction]?.buttons,
-      });
+      }, project.telegramAccount);
       signal.sentAt = now.toISOString();
       signal.messageId = sent?.message_id;
       const log: SendLog = {

@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Sun, Sunrise, Trash2, X } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Smartphone, Sun, Sunrise, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSignalExpired, parseSignalInput, validateSignalTime } from "../lib/signals";
 import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
 
-type Project = ProjectSettings & { botTokenConfigured?: boolean };
+type TelegramAccountView = { sendMode?: "auto" | "bot" | "user"; apiId?: string; phone?: string; targetPeer?: string; accountLabel?: string; status?: "disconnected" | "code_sent" | "password_required" | "connected" | "legacy"; apiHashConfigured?: boolean; sessionConfigured?: boolean; legacyFallback?: boolean };
+type Project = Omit<ProjectSettings, "telegramAccount"> & { botTokenConfigured?: boolean; telegramAccount?: TelegramAccountView };
 type Notice = { text: string; error?: boolean };
 const dateInBrazil = (date = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 const timeInBrazil = (date: string) => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(date));
@@ -45,8 +46,11 @@ export default function Home() {
   const [captureKind, setCaptureKind] = useState<TemplateKind>("signal_down");
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
   const [deleteTarget, setDeleteTarget] = useState("");
+  const [telegramStep, setTelegramStep] = useState<"credentials" | "code" | "password">("credentials");
+  const [telegramForm, setTelegramForm] = useState({ apiId: "", apiHash: "", phone: "", code: "", password: "" });
   const dialogRef = useRef<HTMLDialogElement>(null);
   const listsDialogRef = useRef<HTMLDialogElement>(null);
+  const telegramDialogRef = useRef<HTMLDialogElement>(null);
   const importButtonRef = useRef<HTMLButtonElement>(null);
   const listsButtonRef = useRef<HTMLButtonElement>(null);
   const dirty = useRef(false);
@@ -131,11 +135,34 @@ export default function Home() {
 
   function markDirty() { dirty.current = true; revision.current += 1; setSaveState("saving"); }
   function patchProject(patch: Partial<Project>) { markDirty(); setProjects((items) => items.map((item) => item.id === projectId ? { ...item, ...patch } : item)); }
+  function patchTelegram(patch: Partial<TelegramAccountView>) { patchProject({ telegramAccount: { ...selected?.telegramAccount, ...patch } }); }
   function patchMessage(id: string, patch: Partial<SavedMessage>) { markDirty(); setMessages((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item)); }
   function closeImport() { if (busy === "import") return; dialogRef.current?.close(); importButtonRef.current?.focus(); }
   function openImport() { setReplaceWarning(""); setImportError(""); dialogRef.current?.showModal(); }
   function closeLists() { if (busy.startsWith("delete:")) return; setDeleteTarget(""); listsDialogRef.current?.close(); listsButtonRef.current?.focus(); }
   function viewList(listProjectId: string, listDateKey: string) { setProjectId(listProjectId); setDateKey(listDateKey); setFilter("all"); setDeleteTarget(""); listsDialogRef.current?.close(); }
+
+  function openTelegramConnect() {
+    setTelegramStep("credentials");
+    setTelegramForm({ apiId: selected?.telegramAccount?.apiId || "", apiHash: "", phone: selected?.telegramAccount?.phone || "", code: "", password: "" });
+    telegramDialogRef.current?.showModal();
+  }
+
+  async function connectTelegram(action: "start" | "verify" | "password" | "disconnect") {
+    if (actionPending.current) return;
+    actionPending.current = true; setBusy(`telegram:${action}`);
+    try {
+      const result = await requestJson("/api/telegram/connect", { projectId, action, ...telegramForm });
+      if (result.status === "code_sent") { setTelegramStep("code"); setNotice({ text: result.viaApp ? "Código enviado no aplicativo Telegram." : "Código enviado pelo Telegram." }); }
+      else if (result.status === "password_required") setTelegramStep("password");
+      else {
+        telegramDialogRef.current?.close();
+        setNotice({ text: action === "disconnect" ? "Conta removida deste canal." : `Conta conectada: ${result.accountLabel || "Telegram"}.` });
+        await loadConfig();
+      }
+    } catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro ao conectar Telegram", error: true }); }
+    finally { setBusy(""); actionPending.current = false; }
+  }
 
   async function deleteList(listProjectId: string, listDateKey: string) {
     const key = `${listProjectId}:${listDateKey}`;
@@ -243,17 +270,22 @@ export default function Home() {
           <section className="recent-section"><h2>Últimos envios</h2>{!recentLogs.length ? <p className="subtle">Nenhum envio registrado.</p> : <ol className="recent-list">{recentLogs.map((log) => <li key={log.id}><div className={`log-icon ${log.status}`}>{log.status === "sent" ? <Check size={14} /> : <AlertCircle size={14} />}</div><div><strong>{log.kind === "signal" ? log.label : labels[log.kind as TemplateKind] || log.label}</strong><span>{log.source === "manual" ? "Manual" : "Automático"} · {log.status === "sent" ? "Enviado" : "Erro"}</span>{log.error && <button className="error-link" onClick={() => setNotice({ text: log.error!, error: true })}>Ver erro</button>}</div><time title={new Date(log.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}>{timeInBrazil(log.at)}</time></li>)}</ol>}</section>
         </aside>
       </div> : selected && <div className="settings-sections" key={projectId}>
-        <details><summary>Canal<ChevronDown size={16} /></summary><div className="settings-body fields-grid">
+        <details open><summary>Canal e envio<ChevronDown size={16} /></summary><div className="settings-body fields-grid">
           <label className="wide">Nome<input value={selected.name} onChange={(event) => patchProject({ name: event.target.value })} /></label>
+          <label>Chat ID<input value={selected.chatId || ""} placeholder="-100..." onChange={(event) => patchProject({ chatId: event.target.value })} /></label>
+          <label>Token do bot<input type="password" autoComplete="new-password" value={selected.botToken || ""} placeholder={selected.botTokenConfigured ? "Configurado" : "Cole o token do BotFather"} onChange={(event) => patchProject({ botToken: event.target.value })} /></label>
           <label className="wide">Link do broker<input value={selected.link} onChange={(event) => patchProject({ link: event.target.value })} /></label>
           <label>Texto do botão<input value={selected.brokerLabel} onChange={(event) => patchProject({ brokerLabel: event.target.value })} /></label>
           <label className="checkbox"><input type="checkbox" checked={selected.enabled} onChange={(event) => patchProject({ enabled: event.target.checked })} />Canal ativo</label>
+        </div></details>
+        <details open><summary>Conta Telegram deste canal<ChevronDown size={16} /></summary><div className="settings-body telegram-settings">
+          <div className="telegram-account-row"><div className={`account-icon ${selected.telegramAccount?.sessionConfigured ? "connected" : ""}`}><UserRound size={19} /></div><div><strong>{selected.telegramAccount?.accountLabel || "Nenhuma conta conectada"}</strong><span>{selected.telegramAccount?.legacyFallback ? "Conta antiga do inglês · conecte aqui para separar" : selected.telegramAccount?.sessionConfigured ? "Conectada somente a este canal" : "Necessária para manter emojis personalizados"}</span></div><button onClick={openTelegramConnect}><Smartphone size={16} />{selected.telegramAccount?.sessionConfigured ? "Trocar conta" : "Conectar conta"}</button>{selected.telegramAccount?.status === "connected" && <button className="danger-text" disabled={!!busy} onClick={() => connectTelegram("disconnect")}>Desconectar</button>}</div>
+          <div className="fields-grid telegram-options"><label>Forma de envio<select value={selected.telegramAccount?.sendMode || "auto"} onChange={(event) => patchTelegram({ sendMode: event.target.value as TelegramAccountView["sendMode"] })}><option value="auto">Automático</option><option value="bot">Somente bot</option><option value="user">Somente conta Telegram</option></select></label><label>Destino alternativo <span className="optional">opcional</span><input value={selected.telegramAccount?.targetPeer || ""} placeholder="@canal ou ID" onChange={(event) => patchTelegram({ targetPeer: event.target.value })} /></label></div>
         </div></details>
         <details><summary>Automação<ChevronDown size={16} /></summary><div className="settings-body"><div className="schedule-scroll"><table className="schedule-table"><thead><tr><th>Mensagem</th>{days.map(([day, label]) => <th key={day}>{label}</th>)}<th>Ativo</th></tr></thead><tbody>{messages.map((message) => <tr key={message.id}><td>{labels[message.kind as TemplateKind] || message.label}</td>{message.timeByWeekday ? <td colSpan={3} className="subtle">Horários por dia da semana ↓</td> : days.map(([day, label]) => <td key={day}><input type="time" aria-label={`${message.label} ${label}`} value={message.timeByDay[day] || ""} onChange={(event) => patchMessage(message.id, { timeByDay: { ...message.timeByDay, [day]: event.target.value } })} /></td>)}<td><input type="checkbox" aria-label={`Ativar ${message.label}`} checked={message.enabled} onChange={(event) => patchMessage(message.id, { enabled: event.target.checked })} /></td></tr>)}</tbody></table></div>
           {messages.filter((message) => message.timeByWeekday).map((message) => <div className="weekday-schedule" key={message.id}><h3>{labels[message.kind as TemplateKind] || message.label}</h3><div>{weekdays.map(([day, label]) => <label key={day}>{label}<input type="time" aria-label={`${message.label} ${label}`} value={message.timeByWeekday?.[day] || ""} onChange={(event) => patchMessage(message.id, { timeByWeekday: { ...message.timeByWeekday, [day]: event.target.value } })} /></label>)}</div></div>)}
         </div></details>
         <details><summary>Modelos<ChevronDown size={16} /></summary><div className="settings-body"><div className="model-list">{Object.entries(labels).map(([kind, label]) => { const template = kind === "signal_up" ? selected.signalTemplates?.UP : kind === "signal_down" ? selected.signalTemplates?.DOWN : selected.messageTemplates?.[kind as MessageKind]; return <div key={kind}><span>{label}</span><span className={template ? "saved-model" : "subtle"}>{template ? "Salvo" : "Não capturado"}</span></div>; })}</div><div className="capture-controls"><label>Modelo<select value={captureKind} onChange={(event) => setCaptureKind(event.target.value as TemplateKind)}>{Object.entries(labels).map(([kind, label]) => <option value={kind} key={kind}>{label}</option>)}</select></label><button disabled={!!busy || captureSession?.status === "waiting"} onClick={startCapture}><Radio size={16} />{captureSession?.status === "waiting" ? "Aguardando mensagem…" : "Capturar modelo"}</button></div></div></details>
-        <details><summary>Avançado<ChevronDown size={16} /></summary><div className="settings-body fields-grid"><label>Chat ID<input value={selected.chatId || ""} onChange={(event) => patchProject({ chatId: event.target.value })} /></label><label>Token do bot<input type="password" autoComplete="new-password" value={selected.botToken || ""} placeholder={selected.botTokenConfigured ? "Configurado" : "Token"} onChange={(event) => patchProject({ botToken: event.target.value })} /></label></div></details>
       </div>}
     </main>
 
@@ -265,6 +297,13 @@ export default function Home() {
       {!!parsed.errors.length && <div className="inline-error" role="alert">{parsed.errors.slice(0, 5).map((error) => <p key={error.lineNumber}>Linha {error.lineNumber}: {error.error}</p>)}</div>}
       {(importError || replaceWarning) && <p className="inline-error" role="alert">{importError || replaceWarning}</p>}
       <footer><button disabled={busy === "import"} onClick={closeImport}>Cancelar</button><button className="primary" disabled={!!busy || !parsed.signals.length || !!parsed.errors.length} onClick={() => uploadList(!!replaceWarning)}>{busy === "import" ? <Loader2 size={16} className="spin" /> : <Import size={16} />}{replaceWarning ? "Substituir lista" : "Salvar lista"}</button></footer>
+    </dialog>
+    <dialog ref={telegramDialogRef} className="telegram-dialog" onCancel={(event) => { if (busy.startsWith("telegram:")) event.preventDefault(); }} onClick={(event) => { if (event.target === event.currentTarget && !busy) telegramDialogRef.current?.close(); }}>
+      <div className="dialog-heading"><div><h2>{selected?.telegramAccount?.sessionConfigured ? "Trocar conta Telegram" : "Conectar conta Telegram"}</h2><p>{selected?.name}</p></div><button className="icon-button" aria-label="Fechar conexão" title="Fechar" disabled={busy.startsWith("telegram:")} onClick={() => telegramDialogRef.current?.close()}><X size={20} /></button></div>
+      {telegramStep === "credentials" && <div className="telegram-form"><label>API ID<input inputMode="numeric" value={telegramForm.apiId} onChange={(event) => setTelegramForm((form) => ({ ...form, apiId: event.target.value }))} placeholder="12345678" /></label><label>API Hash<input type="password" autoComplete="new-password" value={telegramForm.apiHash} onChange={(event) => setTelegramForm((form) => ({ ...form, apiHash: event.target.value }))} placeholder={selected?.telegramAccount?.apiHashConfigured ? "Configurado" : "API Hash"} /></label><label>Telefone<input type="tel" value={telegramForm.phone} onChange={(event) => setTelegramForm((form) => ({ ...form, phone: event.target.value }))} placeholder="+5511999999999" /></label><p>Use os dados da conta criada em my.telegram.org. O código chegará no Telegram.</p></div>}
+      {telegramStep === "code" && <div className="telegram-form"><label>Código recebido<input autoFocus inputMode="numeric" autoComplete="one-time-code" value={telegramForm.code} onChange={(event) => setTelegramForm((form) => ({ ...form, code: event.target.value }))} placeholder="12345" /></label><p>Digite apenas os números enviados pelo Telegram.</p></div>}
+      {telegramStep === "password" && <div className="telegram-form"><label>Senha de duas etapas<input autoFocus type="password" value={telegramForm.password} onChange={(event) => setTelegramForm((form) => ({ ...form, password: event.target.value }))} /></label><p>Essa é a senha 2FA da conta Telegram.</p></div>}
+      <footer><button disabled={busy.startsWith("telegram:")} onClick={() => telegramDialogRef.current?.close()}>Cancelar</button><button className="primary" disabled={busy.startsWith("telegram:") || (telegramStep === "credentials" ? !telegramForm.apiId || (!telegramForm.apiHash && !selected?.telegramAccount?.apiHashConfigured) || !telegramForm.phone : telegramStep === "code" ? !telegramForm.code : !telegramForm.password)} onClick={() => connectTelegram(telegramStep === "credentials" ? "start" : telegramStep === "code" ? "verify" : "password")}>{busy.startsWith("telegram:") ? <Loader2 size={16} className="spin" /> : <Send size={16} />}{telegramStep === "credentials" ? "Enviar código" : telegramStep === "code" ? "Confirmar código" : "Confirmar senha"}</button></footer>
     </dialog>
     <dialog ref={listsDialogRef} className="saved-lists-dialog" onCancel={(event) => { if (busy.startsWith("delete:")) event.preventDefault(); }} onClick={(event) => { if (event.target === event.currentTarget) closeLists(); }}>
       <div className="dialog-heading"><div><h2>Listas salvas</h2><p>{savedLists.length} {savedLists.length === 1 ? "lista" : "listas"}</p></div><button className="icon-button" aria-label="Fechar listas salvas" title="Fechar" disabled={busy.startsWith("delete:")} onClick={closeLists}><X size={20} /></button></div>

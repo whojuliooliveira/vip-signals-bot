@@ -1,4 +1,5 @@
 import { canUseTelegramUserSender, sendTelegramUserMessage } from "./telegramUser";
+import type { TelegramAccountSettings } from "./store";
 
 export type SendTelegramMessage = {
   chatId: string;
@@ -14,24 +15,24 @@ export type SendTelegramMessage = {
   buttons?: { text: string; url: string }[][];
 };
 
-export async function sendTelegramMessage(token: string, payload: SendTelegramMessage) {
-  const sendMode = (process.env.TELEGRAM_SEND_MODE || "auto").toLowerCase();
+export async function sendTelegramMessage(token: string, payload: SendTelegramMessage, account?: TelegramAccountSettings) {
+  const sendMode = (account?.sendMode || process.env.TELEGRAM_SEND_MODE || "auto").toLowerCase();
 
   // Bots can silently discard channel custom emojis while returning success.
   if (sendMode === "auto" && payload.entities?.some((entity) => entity.type === "custom_emoji")) {
-    return sendTelegramUserMessage(payload);
+    return sendTelegramUserMessage(payload, account);
   }
 
   if (sendMode === "user") {
-    return sendTelegramUserMessage(payload);
+    return sendTelegramUserMessage(payload, account);
   }
 
   try {
     return await sendTelegramBotApiMessage(token, payload);
   } catch (error) {
-    if (sendMode !== "auto" || !canUseTelegramUserSender(payload)) throw error;
+    if (sendMode !== "auto" || !canUseTelegramUserSender(payload, account)) throw error;
     console.warn("Telegram Bot API falhou; usando sender por conta.", error);
-    return sendTelegramUserMessage(payload);
+    return sendTelegramUserMessage(payload, account);
   }
 }
 

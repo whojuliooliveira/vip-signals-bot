@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || "C:/Users/julio_r7nro/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
 const baseUrl = process.env.UI_TEST_URL || "http://127.0.0.1:5187";
 const dateKey = "2026-10-13";
-const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here" };
+const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false } };
 const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
 const signals = [
   { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
@@ -28,9 +28,15 @@ async function main() {
     let failSend = false;
     let currentSignals = [...signals];
     let deletedList;
+    let telegramConnected = false;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      if (path === "/api/config") return route.fulfill({ json: { ...config, signals: currentSignals } });
+      if (path === "/api/config") return route.fulfill({ json: { ...config, projects: [{ ...project, telegramAccount: telegramConnected ? { sendMode: "auto", status: "connected", sessionConfigured: true, accountLabel: "Tom Test (@tomtest)" } : project.telegramAccount }], signals: currentSignals } });
+      if (path === "/api/telegram/connect") {
+        const payload = route.request().postDataJSON();
+        if (payload.action === "start") return route.fulfill({ json: { ok: true, status: "code_sent", viaApp: true } });
+        if (payload.action === "verify") { telegramConnected = true; return route.fulfill({ json: { ok: true, status: "connected", accountLabel: "Tom Test (@tomtest)" } }); }
+      }
       if (path === "/api/send-signal" || path === "/api/send-message") {
         lastSend = route.request().postDataJSON();
         if (failSend) return route.fulfill({ status: 500, json: { ok: false, error: "Falha simulada no Telegram" } });
@@ -106,7 +112,16 @@ async function main() {
     await page.keyboard.press("Escape");
     await page.locator(".import-dialog").waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
-    assert.equal(await page.locator(".settings-sections > details[open]").count(), 0);
+    assert.equal(await page.locator(".settings-sections > details[open]").count(), 2);
+    await page.getByRole("button", { name: "Conectar conta", exact: true }).click();
+    await page.getByLabel("API ID").fill("123456");
+    await page.getByLabel("API Hash").fill("hash-seguro");
+    await page.getByLabel("Telefone").fill("+5511999999999");
+    await page.getByRole("button", { name: "Enviar código", exact: true }).click();
+    await page.getByLabel("Código recebido").fill("12345");
+    await page.getByRole("button", { name: "Confirmar código", exact: true }).click();
+    await page.locator(".telegram-dialog").waitFor({ state: "hidden" });
+    await page.getByText("Tom Test (@tomtest)", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Lista do dia", exact: true }).click();
     await page.getByRole("button", { name: "Fechar aviso" }).click();
     for (const [name, width, height] of [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]]) {
@@ -115,7 +130,7 @@ async function main() {
       await page.screenshot({ path: `data/operations-${name}.png`, fullPage: true });
     }
     assert.deepEqual(errors, []);
-    console.log("PASS: saved lists view/delete, upcoming filter, signal send, four message tests, import replacement, modal Escape, collapsed settings, desktop/tablet/mobile");
+    console.log("PASS: lists, sends, import, independent Telegram account connection, desktop/tablet/mobile");
   } finally { await browser.close(); }
 }
 main().catch((error) => { console.error(error); process.exit(1); });

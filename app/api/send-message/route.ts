@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!project?.chatId || !message) throw new Error("Canal ou mensagem nao encontrado.");
     const payload = standardMessagePayload(project, message);
     try {
-      const sent = await sendTelegramMessage(project.botToken, payload);
+      const sent = await sendTelegramMessage(project.botToken, payload, project.telegramAccount);
       await appendLog({ id: uid("log"), at: new Date().toISOString(), source: "manual",
         projectId: project.id, projectName: project.name, kind: message.kind, label: message.label,
         text: payload.text, messageId: sent?.message_id, status: "sent" });

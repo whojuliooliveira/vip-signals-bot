@@ -72,6 +72,21 @@ export type SendLog = {
   error?: string;
 };
 
+export type TelegramAccountSettings = {
+  sendMode?: "auto" | "bot" | "user";
+  apiId?: string;
+  apiHash?: string;
+  phone?: string;
+  stringSession?: string;
+  targetPeer?: string;
+  accountLabel?: string;
+  connectedAt?: string;
+  pendingSession?: string;
+  phoneCodeHash?: string;
+  codeSentAt?: string;
+  status?: "disconnected" | "code_sent" | "password_required" | "connected";
+};
+
 export type ProjectSettings = {
   id: string;
   name: string;
@@ -85,6 +100,7 @@ export type ProjectSettings = {
     DOWN?: CapturedTemplate;
   };
   messageTemplates?: Partial<Record<MessageKind, CapturedTemplate>>;
+  telegramAccount?: TelegramAccountSettings;
   enabled: boolean;
 };
 
@@ -285,6 +301,7 @@ async function loadSupabaseStore(): Promise<AppStore> {
       brokerLabel: row.broker_label,
       signalTemplates: row.signal_templates || undefined,
       messageTemplates: row.message_templates || undefined,
+      telegramAccount: row.telegram_account || undefined,
       enabled: row.enabled,
     }))),
     signals: signalRows.map((row) => ({
@@ -344,6 +361,7 @@ async function saveSupabaseStore(store: AppStore) {
       broker_label: project.brokerLabel,
       signal_templates: project.signalTemplates || null,
       message_templates: project.messageTemplates || null,
+      telegram_account: project.telegramAccount || null,
       enabled: project.enabled,
       updated_at: new Date().toISOString(),
     }))),

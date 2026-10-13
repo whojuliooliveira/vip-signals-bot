@@ -12,7 +12,8 @@ Consulte [docs/AUTOMACAO-OPERACIONAL.md](docs/AUTOMACAO-OPERACIONAL.md) para o f
 - Dados persistentes no Supabase.
 - Worker remoto no EasyPanel verificando a agenda a cada 20 segundos.
 - Envio automatico de sinais cinco minutos antes do horario.
-- Canais, modelos e links separados por idioma.
+- Canais, contas Telegram, modelos e links separados por idioma.
+- Conexao e troca de conta Telegram diretamente no painel.
 - Modelos capturados diretamente do Telegram.
 - Mensagens padrao com agenda configuravel.
 - Historico de envios e heartbeat operacional.

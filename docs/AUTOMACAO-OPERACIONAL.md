@@ -13,7 +13,7 @@ A automacao depende de quatro servicos remotos:
 3. **EasyPanel**: mantem o worker ativo e chama a agenda a cada 20 segundos.
 4. **Telegram**: recebe os envios pelo Bot API ou pela conta Telegram conectada.
 
-O computador so volta a ser necessario para manutencao, alteracao de codigo ou para gerar uma nova sessao Telegram caso a sessao atual seja revogada.
+O computador so volta a ser necessario para manutencao ou alteracao de codigo. A troca da conta Telegram passa a ser feita no proprio painel.
 
 Na verificacao que originou este documento, o painel publicado respondeu normalmente e o worker remoto estava atualizando o heartbeat. O estado atual deve ser conferido pelo indicador **Automatico conectado** no painel.
 
@@ -53,6 +53,7 @@ O Supabase e a fonte persistente dos dados. Ele armazena:
 - chaves que impedem repeticao de mensagens padrao;
 - heartbeat do worker;
 - sessoes de captura de modelo.
+- configuracao e sessao Telegram separadas por canal.
 
 ### Worker
 
@@ -258,6 +259,43 @@ Ao capturar um modelo:
 
 Durante a captura, a pagina precisa permanecer aberta para continuar consultando o resultado. Depois de capturado e salvo, o computador nao e mais necessario.
 
+## Canais e contas Telegram independentes
+
+Cada canal possui sua propria configuracao:
+
+- nome e idioma;
+- canal ativo ou inativo;
+- token do bot;
+- Chat ID;
+- link e texto do botao;
+- modelos de sinais e mensagens;
+- modo de envio;
+- conta Telegram conectada;
+- destino alternativo, quando necessario.
+
+Alterar o espanhol nao altera o ingles. A sessao antiga configurada por variavel de ambiente continua sendo usada apenas como compatibilidade do canal ingles ate que uma conta seja conectada diretamente nele.
+
+### Conectar ou trocar uma conta
+
+1. Abra **Configuracoes**.
+2. Escolha o canal no topo.
+3. Abra **Conta Telegram deste canal**.
+4. Clique em **Conectar conta** ou **Trocar conta**.
+5. Informe o API ID, API Hash e telefone com codigo do pais.
+6. Digite o codigo recebido no aplicativo Telegram.
+7. Se a conta tiver verificacao em duas etapas, informe a senha 2FA.
+8. Confira o nome da conta exibido no painel.
+
+API ID e API Hash sao obtidos em `my.telegram.org`. O codigo e a senha 2FA sao exigencias do Telegram; nao existe senha adicional do painel.
+
+### Formas de envio
+
+- **Automatico**: usa a conta Telegram quando o modelo possui emoji personalizado e usa o bot nos demais casos.
+- **Somente bot**: todos os payloads compativeis sao enviados pelo Bot API; emojis personalizados podem perder a aparencia.
+- **Somente conta Telegram**: mensagens de texto sao publicadas pela conta conectada.
+
+Midias capturadas continuam usando o bot. A conta conectada precisa participar do canal e ter permissao para publicar. Para preservar emoji personalizado, ela tambem precisa ter o recurso disponivel na propria conta.
+
 ## Como o Telegram e escolhido
 
 Com `TELEGRAM_SEND_MODE=auto`:
@@ -267,14 +305,14 @@ Com `TELEGRAM_SEND_MODE=auto`:
 - se o Bot API falhar e o payload for compativel, o sistema pode usar a conta conectada;
 - mensagens com midia usam o Bot API.
 
-A conta conectada depende de:
+A compatibilidade antiga do canal ingles depende de:
 
 - `TELEGRAM_API_ID`;
 - `TELEGRAM_API_HASH`;
 - `TELEGRAM_STRING_SESSION`;
 - conta autorizada e, para custom emoji, Premium/permissoes adequadas.
 
-Cada canal tambem depende de token do bot, Chat ID, link e texto do botao.
+Depois que uma conta e conectada pelo painel, esses dados ficam persistidos por canal no Supabase e prevalecem sobre a compatibilidade antiga.
 
 ## Indicador Automatico conectado
 
@@ -293,7 +331,7 @@ Para operar sem o computador:
 - servico `vip-signals-bot` verde no EasyPanel;
 - `PUBLIC_APP_URL` apontando para a URL oficial;
 - `CRON_SECRET` igual no EasyPanel e na Vercel;
-- credenciais do Telegram validas na Vercel;
+- conta Telegram conectada no painel, quando o modelo usa emoji personalizado;
 - bot/conta com permissao de publicar no canal;
 - sessao Telegram autorizada;
 - canal marcado como ativo no painel.
@@ -387,12 +425,12 @@ Depois disso, o navegador e o computador podem ser desligados.
 6. Confira o servico `vip-signals-bot` no EasyPanel.
 7. Confira os logs do worker procurando resposta `401`, erro da Vercel ou erro do Telegram.
 8. Se houver `401`, compare `CRON_SECRET` entre EasyPanel e Vercel.
-9. Se houver erro de sessao, gere e configure uma nova `TELEGRAM_STRING_SESSION`.
+9. Se houver erro de sessao, abra **Configuracoes**, selecione o canal e use **Trocar conta**.
 10. Se o horario ja expirou, use **Enviar agora** ou importe uma lista corrigida; o automatico nao faz catch-up.
 
 ## Seguranca operacional
 
-Por decisao operacional, o painel esta publico e nao pede senha. Isso tambem deixa publicas as acoes de enviar, alterar configuracoes e apagar listas para quem conhecer a URL.
+Por decisao operacional expressamente confirmada, o painel esta publico e nao pede senha. Isso tambem deixa publicas as acoes de enviar, alterar configuracoes, apagar listas e iniciar a troca de conta para quem conhecer a URL. A conclusao da conexao ainda exige o codigo oficial do Telegram e a senha 2FA quando habilitada.
 
 O endpoint da agenda continua protegido por `CRON_SECRET`, e os segredos nao sao exibidos pelo painel. Mesmo assim:
 

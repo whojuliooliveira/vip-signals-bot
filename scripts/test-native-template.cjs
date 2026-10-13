@@ -58,4 +58,4 @@ async function main() {
     await client.destroy();
   }
 }
-main().then(() => process.exit(0)).catch((error) => { console.error(error.message); process.exit(1); });
+main().catch((error) => { console.error(error.message); process.exitCode = 1; });
