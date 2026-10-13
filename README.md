@@ -2,18 +2,21 @@
 
 Projeto 100% separado para enviar sinais VIP em dois canais: espanhol e ingles.
 
+## Documentacao operacional
+
+Consulte [docs/AUTOMACAO-OPERACIONAL.md](docs/AUTOMACAO-OPERACIONAL.md) para o fluxo completo da automacao, regra dos cinco minutos, arquitetura remota, operacao diaria e solucao de falhas.
+
 ## O que tem
 
-- Painel web para Vercel.
-- API protegida por `ADMIN_PASSWORD`.
-- Envio para canal ES, EN ou ambos.
-- Templates separados por idioma.
-- Links separados por idioma.
-- Preview antes de enviar.
-- Botao inline opcional com o link do broker.
-- Biblioteca editavel de mensagens fixas.
-- Agenda por dia: segunda a sexta, sabado e domingo.
-- Monitor de envios salvo em `data/store.json`.
+- Painel web publicado na Vercel.
+- Dados persistentes no Supabase.
+- Worker remoto no EasyPanel verificando a agenda a cada 20 segundos.
+- Envio automatico de sinais cinco minutos antes do horario.
+- Canais, modelos e links separados por idioma.
+- Modelos capturados diretamente do Telegram.
+- Mensagens padrao com agenda configuravel.
+- Historico de envios e heartbeat operacional.
+- Gerenciamento de listas por canal e data.
 
 ## Rodar local
 
@@ -31,6 +34,4 @@ Configure as variaveis da `.env.example` no projeto da Vercel.
 
 O bot precisa estar como admin nos dois canais/grupos com permissao de postar.
 
-Para agenda automatica, chame `/api/run-schedule` a cada minuto com o header `x-cron-secret` igual ao `CRON_SECRET`.
-
-Na VPS, o arquivo `data/store.json` guarda mensagens, agenda e historico. Em Vercel puro, use um banco externo antes de depender desse arquivo.
+O worker do EasyPanel chama `/api/run-schedule` com o `CRON_SECRET`. O Supabase guarda listas, configuracoes, modelos e historico.

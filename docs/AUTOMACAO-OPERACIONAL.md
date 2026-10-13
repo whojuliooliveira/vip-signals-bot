@@ -1,0 +1,406 @@
+# Automacao operacional do VIP Signals Bot
+
+Documento verificado em 13/10/2026. Todos os horarios abaixo usam `America/Sao_Paulo` (Brasilia, UTC-3).
+
+## Resposta direta: o computador precisa ficar ligado?
+
+Nao. Depois que a lista e salva, o navegador pode ser fechado e o computador pode ser desligado.
+
+A automacao depende de quatro servicos remotos:
+
+1. **Vercel**: hospeda o painel e executa as APIs.
+2. **Supabase**: guarda canais, listas, sinais, modelos, configuracoes e historico.
+3. **EasyPanel**: mantem o worker ativo e chama a agenda a cada 20 segundos.
+4. **Telegram**: recebe os envios pelo Bot API ou pela conta Telegram conectada.
+
+O computador so volta a ser necessario para manutencao, alteracao de codigo ou para gerar uma nova sessao Telegram caso a sessao atual seja revogada.
+
+Na verificacao que originou este documento, o painel publicado respondeu normalmente e o worker remoto estava atualizando o heartbeat. O estado atual deve ser conferido pelo indicador **Automatico conectado** no painel.
+
+## Arquitetura atual
+
+```text
+Usuario no navegador
+        |
+        v
+Painel e APIs na Vercel
+        |
+        +---- Supabase (dados persistentes)
+        |
+        +---- Telegram (envios)
+        ^
+        |
+Worker no EasyPanel, a cada 20 segundos
+```
+
+### Painel e APIs
+
+Endereco oficial:
+
+`https://vip-signals-bot-bice.vercel.app`
+
+O painel e apenas a interface de operacao. Fechar essa pagina nao interrompe o automatico.
+
+### Banco de dados
+
+O Supabase e a fonte persistente dos dados. Ele armazena:
+
+- projetos/canais;
+- listas e sinais;
+- mensagens automaticas;
+- modelos capturados;
+- registros de envio;
+- chaves que impedem repeticao de mensagens padrao;
+- heartbeat do worker;
+- sessoes de captura de modelo.
+
+### Worker
+
+O container `vip-signals-bot` no EasyPanel inicia:
+
+- uma instancia interna do Next.js;
+- o processo `scripts/schedule-worker.mjs`.
+
+O worker chama a API publica da Vercel em `/api/run-schedule` a cada `WORKER_INTERVAL_MS`. O valor operacional atual e 20.000 ms, ou 20 segundos.
+
+A chamada usa `CRON_SECRET`. O mesmo segredo precisa existir no EasyPanel e na Vercel.
+
+O worker evita iniciar uma segunda verificacao enquanto a anterior ainda esta rodando. Deve existir apenas uma replica ativa desse worker para evitar concorrencia desnecessaria.
+
+## Fluxo diario completo
+
+### 1. Escolher canal e data
+
+No topo do painel:
+
+1. selecione o canal;
+2. selecione a data literal dos sinais;
+3. clique em **Importar lista**.
+
+A data e literal. Um sinal de `14/10/2026 00:00` pertence ao dia 14 e tem envio previsto para `13/10/2026 23:55`.
+
+### 2. Importar a lista
+
+O formato principal aceito e:
+
+```text
+M5;AUDCAD-OTC;14:30;PUT
+M5;AUDNZD-OTC;14:45;CALL
+```
+
+O importador tambem reconhece linhas com:
+
+- par no formato `AUD/CAD`;
+- horario `HH:mm`;
+- direcoes `UP`, `CALL`, `BUY`, `DOWN`, `PUT` ou `SELL`;
+- equivalentes em espanhol e portugues previstos pelo parser.
+
+Linhas repetidas da mesma importacao sao ignoradas. Linhas que parecem sinais, mas nao possuem ativo, horario ou direcao reconhecivel, geram erro e impedem o salvamento ate serem corrigidas.
+
+### 3. Classificacao automatica ou manual
+
+Um sinal entra no automatico quando atende simultaneamente a estas regras:
+
+- horario entre `07:20` e `03:30`;
+- minuto terminado em `:55`, `:00`, `:05`, `:25`, `:30` ou `:35`;
+- ainda nao foi enviado;
+- a janela de envio ainda nao expirou.
+
+Sinais fora desses criterios continuam salvos e visiveis, mas ficam como **Manual**. Eles podem ser enviados pelo botao **Enviar agora**.
+
+### 4. Tela principal
+
+A tela abre na aba **Proximos**.
+
+**Proximos** mostra somente sinais que:
+
+- sao elegiveis para o automatico;
+- ainda nao foram enviados;
+- ainda nao expiraram;
+- nao possuem erro registrado.
+
+**Todos** mostra a lista completa da data, incluindo manuais, expirados e enviados.
+
+### 5. Listas salvas
+
+O botao **Listas salvas** mostra todas as combinacoes de canal e data existentes no banco.
+
+Cada lista informa:
+
+- data;
+- canal;
+- quantidade total de sinais;
+- quantidade enviada.
+
+Comandos:
+
+- **Ver**: abre o canal e a data daquela lista na visao completa.
+- **Apagar**: pede confirmacao e remove todos os sinais daquela lista.
+
+Apagar uma lista nao apaga o historico de envios. O historico continua servindo como registro operacional.
+
+## Regra exata de envio dos sinais
+
+Para cada sinal, o sistema calcula:
+
+```text
+horario de envio = data do sinal + horario do sinal - 5 minutos
+```
+
+Exemplos:
+
+| Sinal | Envio automatico |
+|---|---|
+| 13/10 14:30 | 13/10 14:25 |
+| 13/10 00:00 | 12/10 23:55 |
+| 14/10 00:00 | 13/10 23:55 |
+
+### Janela de tolerancia
+
+O sinal fica elegivel desde cinco minutos antes ate o horario do proprio sinal.
+
+Exemplo para um sinal das `14:30`:
+
+- inicio da janela: `14:25:00`;
+- fim da janela: aproximadamente `14:30:00`;
+- o worker verifica a cada 20 segundos;
+- no primeiro ciclo dentro da janela, o sinal e enviado;
+- depois do fim da janela, ele fica **Expirado** e nao existe envio atrasado automatico.
+
+Essa tolerancia protege contra pequenos atrasos do worker. Ela nao serve como recuperacao de uma queda longa.
+
+### O que acontece no envio
+
+Quando encontra um sinal devido, a API:
+
+1. confirma que o canal esta ativo;
+2. carrega as credenciais e o modelo do canal;
+3. substitui os campos variaveis do modelo, como ativo, direcao e horario;
+4. envia ao Telegram;
+5. salva `sentAt` e o ID da mensagem;
+6. grava um registro de sucesso;
+7. o sinal deixa de aparecer em **Proximos**.
+
+Se o Telegram retornar erro, o erro e registrado. Enquanto a janela ainda estiver aberta, o worker pode tentar novamente nos ciclos seguintes. Depois que a janela expira, nao ha nova tentativa automatica.
+
+## Status dos sinais
+
+| Status | Significado |
+|---|---|
+| Aguardando | Elegivel e com horario futuro |
+| Enviado | Envio automatico concluido e persistido |
+| Manual | Fora dos criterios do automatico |
+| Expirado | A janela automatica terminou sem envio |
+| Erro | O ultimo envio encontrou uma falha |
+
+O botao **Enviar agora** permanece disponivel para qualquer linha, inclusive manual ou expirada.
+
+### Atencao ao envio manual de um sinal
+
+Atualmente, **Enviar agora** publica a mensagem e grava o envio no historico, mas nao cancela automaticamente a programacao original daquela linha. Se um sinal futuro elegivel for enviado manualmente antes do horario, ele ainda pode ser enviado novamente pelo automatico quando chegar sua janela.
+
+Para impedir a segunda publicacao, remova ou substitua a lista antes da janela automatica. Esse comportamento nao se aplica aos botoes **Testar** das mensagens padrao: eles sempre enviam uma copia de teste sem alterar a agenda.
+
+## Mensagens padrao
+
+Existem quatro tipos:
+
+1. Emoji de abertura;
+2. Bom dia;
+3. Inicio das analises;
+4. Boa noite.
+
+Cada mensagem pode ser ativada/desativada e ter horario proprio. Os valores iniciais do codigo sao:
+
+| Mensagem | Segunda a sexta | Sabado | Domingo |
+|---|---:|---:|---:|
+| Emoji de abertura | 06:54 | 07:50 | 08:55 |
+| Bom dia | 07:01 | 08:00 | 09:00 |
+| Inicio das analises | 07:15 | 08:15 | 09:00 |
+
+Boa noite usa configuracao individual por dia da semana. As configuracoes salvas no painel/Supabase prevalecem sobre os valores iniciais do codigo.
+
+### Como a agenda das mensagens funciona
+
+Em cada ciclo, o sistema:
+
+1. identifica o dia da semana em Brasilia;
+2. encontra as mensagens ativas para aquele horario;
+3. envia para cada canal ativo associado;
+4. cria uma chave unica com data, horario, mensagem e canal;
+5. nao envia novamente se essa chave ja existir.
+
+A janela das mensagens padrao vai do horario programado ate quatro minutos depois. Depois disso nao existe recuperacao automatica.
+
+### Botao Testar
+
+O botao **Testar** envia uma copia imediata da mensagem ao canal. Ele nao marca a mensagem agendada como concluida e nao cancela o proximo envio automatico.
+
+## Modelos e formatacao
+
+Os modelos sao salvos por canal para:
+
+- CALL/BUY;
+- PUT/SELL;
+- emoji de abertura;
+- bom dia;
+- inicio das analises;
+- boa noite.
+
+Ao capturar um modelo:
+
+1. o painel cria uma sessao de captura de cinco minutos;
+2. voce publica o exemplo original no canal;
+3. o painel consulta as atualizacoes do bot;
+4. texto, entidades, midia e botoes sao capturados quando disponiveis;
+5. campos variaveis do sinal viram marcadores reutilizaveis;
+6. o modelo e salvo no Supabase.
+
+Durante a captura, a pagina precisa permanecer aberta para continuar consultando o resultado. Depois de capturado e salvo, o computador nao e mais necessario.
+
+## Como o Telegram e escolhido
+
+Com `TELEGRAM_SEND_MODE=auto`:
+
+- mensagens com emoji personalizado usam a conta Telegram conectada;
+- mensagens comuns tentam usar o Bot API;
+- se o Bot API falhar e o payload for compativel, o sistema pode usar a conta conectada;
+- mensagens com midia usam o Bot API.
+
+A conta conectada depende de:
+
+- `TELEGRAM_API_ID`;
+- `TELEGRAM_API_HASH`;
+- `TELEGRAM_STRING_SESSION`;
+- conta autorizada e, para custom emoji, Premium/permissoes adequadas.
+
+Cada canal tambem depende de token do bot, Chat ID, link e texto do botao.
+
+## Indicador Automatico conectado
+
+O EasyPanel chama a agenda e a API grava um heartbeat no Supabase.
+
+O painel mostra **Automatico conectado** quando o heartbeat tem menos de dois minutos. Isso confirma que o worker esta chamando a Vercel recentemente.
+
+O indicador nao garante sozinho que o Telegram aceitou todas as mensagens. Para isso, confira **Ultimos envios** e o canal.
+
+## O que precisa permanecer ativo
+
+Para operar sem o computador:
+
+- projeto da Vercel implantado e acessivel;
+- Supabase ativo;
+- servico `vip-signals-bot` verde no EasyPanel;
+- `PUBLIC_APP_URL` apontando para a URL oficial;
+- `CRON_SECRET` igual no EasyPanel e na Vercel;
+- credenciais do Telegram validas na Vercel;
+- bot/conta com permissao de publicar no canal;
+- sessao Telegram autorizada;
+- canal marcado como ativo no painel.
+
+## Variaveis de ambiente
+
+Nunca coloque os valores reais em documentacao, commit, print ou mensagem publica.
+
+### Vercel
+
+- `CRON_SECRET`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `TELEGRAM_SEND_MODE`
+- `TELEGRAM_API_ID`
+- `TELEGRAM_API_HASH`
+- `TELEGRAM_STRING_SESSION`
+- `TELEGRAM_TARGET_PEER` quando necessario
+- variaveis `PROJECT_1_*`
+- variaveis `PROJECT_2_*`
+
+### EasyPanel
+
+O worker precisa, no minimo, de:
+
+- `PUBLIC_APP_URL=https://vip-signals-bot-bice.vercel.app`
+- `CRON_SECRET` igual ao da Vercel
+- `WORKER_INTERVAL_MS=20000`
+
+O container atual recebe outras variaveis porque tambem inicia uma instancia interna do painel.
+
+## Falhas e comportamento esperado
+
+### EasyPanel parado
+
+- o painel continua abrindo;
+- importacao e envio manual continuam dependendo da Vercel;
+- sinais e mensagens automaticas param;
+- o indicador fica sem confirmacao apos aproximadamente dois minutos;
+- horarios que expirarem durante a parada nao sao enviados depois.
+
+### Vercel indisponivel
+
+- painel e APIs param;
+- o worker registra erro HTTP/conexao;
+- nao ha envio ate a Vercel voltar;
+- janelas vencidas nao sao recuperadas.
+
+### Supabase indisponivel
+
+- listas e configuracoes nao carregam;
+- agenda nao consegue consultar/salvar o estado;
+- heartbeat para de atualizar;
+- o automatico deve ser considerado indisponivel.
+
+### Telegram rejeita o envio
+
+Possiveis causas:
+
+- bot sem permissao;
+- Chat ID incorreto;
+- token revogado;
+- sessao Telegram expirada;
+- conta sem acesso ao canal;
+- custom emoji sem suporte/permissao;
+- modelo de midia invalido.
+
+O erro aparece no historico e/ou no status da linha.
+
+## Checklist diario
+
+1. Abra o painel.
+2. Confirme **Automatico conectado**.
+3. Selecione canal e data correta.
+4. Importe a lista.
+5. Abra **Proximos** e confira o que realmente sera disparado.
+6. Abra **Todos** para conferir manuais e expirados.
+7. Use **Listas salvas** para validar canal, data e quantidade.
+8. Confirme no Telegram o primeiro envio do dia.
+9. Acompanhe **Ultimos envios** quando necessario.
+
+Depois disso, o navegador e o computador podem ser desligados.
+
+## Checklist quando nada sair
+
+1. Veja se o indicador esta verde.
+2. Abra **Proximos** e confirme que o sinal ainda esta na janela futura.
+3. Confira se a data da lista esta correta.
+4. Confira se o canal esta ativo.
+5. Veja **Ultimos envios** e o status da linha.
+6. Confira o servico `vip-signals-bot` no EasyPanel.
+7. Confira os logs do worker procurando resposta `401`, erro da Vercel ou erro do Telegram.
+8. Se houver `401`, compare `CRON_SECRET` entre EasyPanel e Vercel.
+9. Se houver erro de sessao, gere e configure uma nova `TELEGRAM_STRING_SESSION`.
+10. Se o horario ja expirou, use **Enviar agora** ou importe uma lista corrigida; o automatico nao faz catch-up.
+
+## Seguranca operacional
+
+Por decisao operacional, o painel esta publico e nao pede senha. Isso tambem deixa publicas as acoes de enviar, alterar configuracoes e apagar listas para quem conhecer a URL.
+
+O endpoint da agenda continua protegido por `CRON_SECRET`, e os segredos nao sao exibidos pelo painel. Mesmo assim:
+
+- nao compartilhe a URL desnecessariamente;
+- nunca exponha tokens, service role key ou string session;
+- rotacione qualquer credencial que tenha aparecido em logs, prints ou conversas compartilhadas;
+- considere reativar uma protecao de acesso se o endereco circular fora da equipe.
+
+## Resumo final
+
+O fluxo automatico nao depende do computador. A lista fica no Supabase, o EasyPanel acorda a agenda a cada 20 segundos, a Vercel decide o que esta no horario e envia ao Telegram. O ponto de maior importancia operacional e manter o worker do EasyPanel verde e conferir o indicador de heartbeat no painel.
