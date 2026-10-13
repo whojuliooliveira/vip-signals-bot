@@ -26,15 +26,23 @@ async function main() {
     let imported = 0;
     let lastSend;
     let failSend = false;
+    let currentSignals = [...signals];
+    let deletedList;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      if (path === "/api/config") return route.fulfill({ json: config });
+      if (path === "/api/config") return route.fulfill({ json: { ...config, signals: currentSignals } });
       if (path === "/api/send-signal" || path === "/api/send-message") {
         lastSend = route.request().postDataJSON();
         if (failSend) return route.fulfill({ status: 500, json: { ok: false, error: "Falha simulada no Telegram" } });
         return route.fulfill({ json: { ok: true, results: [], messageId: 123 } });
       }
       if (path === "/api/signals") {
+        if (route.request().method() === "DELETE") {
+          deletedList = route.request().postDataJSON();
+          const before = currentSignals.length;
+          currentSignals = currentSignals.filter((signal) => signal.projectId !== deletedList.projectId || signal.dateKey !== deletedList.dateKey);
+          return route.fulfill({ json: { ok: true, deleted: before - currentSignals.length, signals: currentSignals } });
+        }
         imported++;
         const payload = route.request().postDataJSON();
         if (!payload.confirmReplace) return route.fulfill({ json: { ok: false, requiresConfirmation: true, error: "Lista existente. Substituir?" } });
@@ -56,6 +64,18 @@ async function main() {
     await page.getByLabel("Data da lista").fill("2026-10-12");
     assert.match(await page.locator(".signals-table tbody tr").innerText(), /Expirado/);
     await page.getByLabel("Data da lista").fill(dateKey);
+    await page.getByRole("button", { name: "Listas salvas", exact: true }).click();
+    assert.equal(await page.locator(".saved-list-row").count(), 3);
+    await page.getByRole("button", { name: "Ver lista 13/10/2026 Tom Reed | VIP Signals", exact: true }).click();
+    await page.locator(".saved-lists-dialog").waitFor({ state: "hidden" });
+    assert.equal(await page.getByLabel("Data da lista").inputValue(), dateKey);
+    await page.getByRole("button", { name: "Listas salvas", exact: true }).click();
+    await page.getByRole("button", { name: "Apagar lista 12/10/2026 Tom Reed | VIP Signals", exact: true }).click();
+    await page.getByRole("button", { name: "Confirmar exclusão da lista 12/10/2026 Tom Reed | VIP Signals", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "Lista apagada" }).waitFor();
+    assert.equal(await page.locator(".saved-list-row").count(), 2);
+    assert.deepEqual(deletedList, { projectId: project.id, dateKey: "2026-10-12" });
+    await page.getByRole("button", { name: "Fechar listas salvas", exact: true }).click();
     assert.equal(await page.locator("textarea:visible").count(), 0);
     assert.equal(await page.getByRole("button", { name: "Automáticos", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "Manuais", exact: true }).count(), 0);
@@ -76,7 +96,7 @@ async function main() {
     await page.getByLabel("Lista de sinais").fill("M5;AUDCAD-OTC;14:30;PUT");
     await page.getByRole("button", { name: "Salvar lista", exact: true }).click();
     await page.getByRole("button", { name: "Substituir lista", exact: true }).click();
-    await page.locator("dialog").waitFor({ state: "hidden" });
+    await page.locator(".import-dialog").waitFor({ state: "hidden" });
     failSend = true;
     await page.getByRole("button", { name: "Testar Bom dia", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "Falha simulada" }).waitFor();
@@ -84,7 +104,7 @@ async function main() {
     assert.equal(imported, 2);
     await page.getByRole("button", { name: "Importar lista", exact: true }).click();
     await page.keyboard.press("Escape");
-    await page.locator("dialog").waitFor({ state: "hidden" });
+    await page.locator(".import-dialog").waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Configurações", exact: true }).click();
     assert.equal(await page.locator(".settings-sections > details[open]").count(), 0);
     await page.getByRole("button", { name: "Lista do dia", exact: true }).click();
@@ -95,7 +115,7 @@ async function main() {
       await page.screenshot({ path: `data/operations-${name}.png`, fullPage: true });
     }
     assert.deepEqual(errors, []);
-    console.log("PASS: upcoming filter, signal send, four message tests, import replacement, modal Escape, collapsed settings, desktop/tablet/mobile");
+    console.log("PASS: saved lists view/delete, upcoming filter, signal send, four message tests, import replacement, modal Escape, collapsed settings, desktop/tablet/mobile");
   } finally { await browser.close(); }
 }
 main().catch((error) => { console.error(error); process.exit(1); });

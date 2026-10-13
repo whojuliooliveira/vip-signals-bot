@@ -64,3 +64,20 @@ export async function POST(request: NextRequest) {
   const expired = created.filter((signal) => isSignalExpired(signal.dateKey, signal.time)).length;
   return NextResponse.json({ ok: true, parsed, errors: [], created, expired, signals: store.signals });
 }
+
+export async function DELETE(request: NextRequest) {
+  const body = await request.json();
+  const projectId = String(body.projectId || "");
+  const dateKey = String(body.dateKey || "");
+  if (!projectId || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return NextResponse.json({ ok: false, error: "Canal ou data inválidos." }, { status: 400 });
+  }
+
+  const store = await loadStore();
+  const removed = store.signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey);
+  store.signals = store.signals.filter((signal) => signal.projectId !== projectId || signal.dateKey !== dateKey);
+  await deleteSignalsByIds(removed.map((signal) => signal.id));
+  await saveStore(store);
+
+  return NextResponse.json({ ok: true, deleted: removed.length, signals: store.signals });
+}

@@ -37,7 +37,8 @@ main { width: 100%; max-width: 1800px; margin: 0 auto; padding: 32px 36px 60px; 
 .toolbar { display: flex; align-items: flex-end; gap: 14px; padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
 .channel-field { width: min(420px, 100%); }
 .date-field { width: 168px; flex-shrink: 0; }
-.import-button { margin-left: auto; min-height: 40px; }
+.list-actions { margin-left: auto; display: flex; gap: 10px; }
+.import-button { min-height: 40px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-items: start; }
 .workspace > *, .toolbar > *, .fields-grid > * { min-width: 0; }
 .list-heading { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
@@ -115,6 +116,21 @@ summary::-webkit-details-marker { display: none; }
 .import-dialog textarea { min-height: 220px; max-height: 40dvh; resize: vertical; font: 13px/1.7 Consolas, monospace; }
 .import-count { color: var(--muted); font-size: 12px; margin-top: 8px; }
 .import-dialog footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.saved-lists-dialog { color: var(--text); background: #1b1e1e; padding: 24px; border: 1px solid #454d4b; border-radius: 8px; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; }
+.saved-lists-dialog::backdrop { background: #000b; }
+.saved-lists-dialog .dialog-heading { margin-bottom: 16px; }
+.saved-lists-dialog .dialog-heading p { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.saved-lists { border-top: 1px solid var(--line); }
+.saved-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.saved-list-row strong, .saved-list-row span, .saved-list-row small { display: block; }
+.saved-list-row strong { font-size: 14px; }
+.saved-list-row span { margin-top: 2px; font-size: 12px; color: #c7cdcc; overflow-wrap: anywhere; }
+.saved-list-row small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.saved-list-actions { display: flex; gap: 8px; }
+.saved-list-actions button { min-width: 88px; }
+.saved-list-actions .danger { color: var(--red); }
+.saved-list-actions .danger.confirm { background: #4a2828; border-color: #8d4e4e; color: #ffd2cf; }
+.saved-lists-empty { min-height: 180px; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
 .inline-error { color: #ffb3a7; font-size: 12px; padding: 12px; border-left: 2px solid #ec8b80; background: #342524; margin-top: 12px; }
 .toast { position: fixed; z-index: 10; bottom: 22px; right: 24px; width: fit-content; max-width: min(560px, calc(100vw - 32px)); background: #242a28; border: 1px solid #4a6257; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 12px 40px #0006; }
 .toast > svg { flex-shrink: 0; color: var(--green); }
@@ -152,7 +168,9 @@ summary::-webkit-details-marker { display: none; }
   .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 145px; gap: 14px 10px; }
   .channel-field { grid-column: 1 / -1; width: 100%; }
   .date-field { width: 100%; grid-column: 1 / -1; }
-  .import-button { width: 100%; margin-left: 0; grid-column: 1 / -1; }
+  .list-actions { width: 100%; margin-left: 0; grid-column: 1 / -1; }
+  .list-actions button { flex: 1; }
+  .import-button { width: auto; }
   .save-indicator { grid-column: 1 / -1; margin: 0; padding: 0; }
   input, select, textarea { font-size: 16px; }
   .list-heading { flex-wrap: wrap; }
@@ -181,6 +199,9 @@ summary::-webkit-details-marker { display: none; }
   .capture-controls label { width: 100%; }
   .import-dialog { padding: 18px; }
   .import-dialog textarea { font-size: 16px; }
+  .saved-lists-dialog { padding: 18px; }
+  .saved-list-row { grid-template-columns: 1fr; gap: 10px; }
+  .saved-list-actions button { flex: 1; }
   .toast { bottom: 16px; right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation-duration: .01ms !important; } }

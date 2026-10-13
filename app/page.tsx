@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Clock3, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Sun, Sunrise, X } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Sun, Sunrise, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSignalExpired, parseSignalInput, validateSignalTime } from "../lib/signals";
 import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
@@ -15,8 +15,8 @@ const messageIcons = { morning_emoji: Sunrise, good_morning: Sun, analysis_start
 const days: [DayMode, string][] = [["weekday", "Seg–Sex"], ["saturday", "Sábado"], ["sunday", "Domingo"]];
 const weekdays: [Weekday, string][] = [["monday", "Seg"], ["tuesday", "Ter"], ["wednesday", "Qua"], ["thursday", "Qui"], ["friday", "Sex"], ["saturday", "Sáb"], ["sunday", "Dom"]];
 
-async function requestJson(url: string, body?: unknown) {
-  const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function requestJson(url: string, body?: unknown, method = "POST") {
+  const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const result = await response.json();
   if (!response.ok || !result.ok) throw new Error(result.error || "Não foi possível concluir. Tente novamente.");
   return result;
@@ -44,8 +44,11 @@ export default function Home() {
   const [manualResults, setManualResults] = useState<Record<string, { sent?: boolean; error?: string }>>({});
   const [captureKind, setCaptureKind] = useState<TemplateKind>("signal_down");
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const listsDialogRef = useRef<HTMLDialogElement>(null);
   const importButtonRef = useRef<HTMLButtonElement>(null);
+  const listsButtonRef = useRef<HTMLButtonElement>(null);
   const dirty = useRef(false);
   const revision = useRef(0);
   const actionPending = useRef(false);
@@ -55,6 +58,17 @@ export default function Home() {
   const upcoming = (signal: ScheduledSignal) => automatic(signal) && !signal.sentAt && !signal.error && !manualResults[signal.id]?.sent && !manualResults[signal.id]?.error && !isSignalExpired(signal.dateKey, signal.time, new Date(now));
   const dailySignals = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey).sort((a, b) => a.time.localeCompare(b.time) || a.pair.localeCompare(b.pair)), [signals, projectId, dateKey]);
   const visibleSignals = dailySignals.filter((signal) => filter === "all" || upcoming(signal));
+  const savedLists = useMemo(() => {
+    const grouped = new Map<string, { projectId: string; dateKey: string; count: number; sent: number }>();
+    for (const signal of signals) {
+      const key = `${signal.projectId}:${signal.dateKey}`;
+      const item = grouped.get(key) || { projectId: signal.projectId, dateKey: signal.dateKey, count: 0, sent: 0 };
+      item.count += 1;
+      if (signal.sentAt) item.sent += 1;
+      grouped.set(key, item);
+    }
+    return [...grouped.values()].sort((a, b) => b.dateKey.localeCompare(a.dateKey) || a.projectId.localeCompare(b.projectId));
+  }, [signals]);
   const recentLogs = logs.filter((log) => log.projectId === projectId).slice(0, 5);
   const connected = Boolean(workerLastSeen && now - Date.parse(workerLastSeen) < 120000);
 
@@ -120,6 +134,21 @@ export default function Home() {
   function patchMessage(id: string, patch: Partial<SavedMessage>) { markDirty(); setMessages((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item)); }
   function closeImport() { if (busy === "import") return; dialogRef.current?.close(); importButtonRef.current?.focus(); }
   function openImport() { setReplaceWarning(""); setImportError(""); dialogRef.current?.showModal(); }
+  function closeLists() { if (busy.startsWith("delete:")) return; setDeleteTarget(""); listsDialogRef.current?.close(); listsButtonRef.current?.focus(); }
+  function viewList(listProjectId: string, listDateKey: string) { setProjectId(listProjectId); setDateKey(listDateKey); setFilter("all"); setDeleteTarget(""); listsDialogRef.current?.close(); }
+
+  async function deleteList(listProjectId: string, listDateKey: string) {
+    const key = `${listProjectId}:${listDateKey}`;
+    if (deleteTarget !== key) { setDeleteTarget(key); return; }
+    if (actionPending.current) return;
+    actionPending.current = true; setBusy(`delete:${key}`);
+    try {
+      const result = await requestJson("/api/signals", { projectId: listProjectId, dateKey: listDateKey }, "DELETE");
+      setDeleteTarget(""); setSignals(result.signals || []);
+      setNotice({ text: `Lista apagada. ${result.deleted || 0} sinais removidos.` });
+    } catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro ao apagar a lista", error: true }); }
+    finally { setBusy(""); actionPending.current = false; }
+  }
 
   async function uploadList(confirmReplace = false) {
     if (actionPending.current || !parsed.signals.length || parsed.errors.length) return;
@@ -184,7 +213,7 @@ export default function Home() {
       </div>
       <div className="toolbar">
         <label className="channel-field">Canal<select value={projectId} disabled={loading || !!busy} onChange={(event) => setProjectId(event.target.value)}>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-        {tab === "lista" ? <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></> : <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}
+        {tab === "lista" ? <><label className="date-field">Data<input aria-label="Data da lista" type="date" value={dateKey} disabled={!!busy} onChange={(event) => setDateKey(event.target.value)} /></label><div className="list-actions"><button ref={listsButtonRef} disabled={loading || !!busy} onClick={() => listsDialogRef.current?.showModal()}><CalendarDays size={16} />Listas salvas</button><button ref={importButtonRef} className="primary import-button" disabled={loading || !!busy || !selected} onClick={openImport}><Import size={16} />Importar lista</button></div></> : <span className={`save-indicator ${saveState}`}>{saveState === "saving" ? "Salvando…" : saveState === "error" ? "Erro ao salvar" : "Alterações salvas"}</span>}
       </div>
 
       {tab === "lista" ? <div className="workspace">
@@ -236,6 +265,17 @@ export default function Home() {
       {!!parsed.errors.length && <div className="inline-error" role="alert">{parsed.errors.slice(0, 5).map((error) => <p key={error.lineNumber}>Linha {error.lineNumber}: {error.error}</p>)}</div>}
       {(importError || replaceWarning) && <p className="inline-error" role="alert">{importError || replaceWarning}</p>}
       <footer><button disabled={busy === "import"} onClick={closeImport}>Cancelar</button><button className="primary" disabled={!!busy || !parsed.signals.length || !!parsed.errors.length} onClick={() => uploadList(!!replaceWarning)}>{busy === "import" ? <Loader2 size={16} className="spin" /> : <Import size={16} />}{replaceWarning ? "Substituir lista" : "Salvar lista"}</button></footer>
+    </dialog>
+    <dialog ref={listsDialogRef} className="saved-lists-dialog" onCancel={(event) => { if (busy.startsWith("delete:")) event.preventDefault(); }} onClick={(event) => { if (event.target === event.currentTarget) closeLists(); }}>
+      <div className="dialog-heading"><div><h2>Listas salvas</h2><p>{savedLists.length} {savedLists.length === 1 ? "lista" : "listas"}</p></div><button className="icon-button" aria-label="Fechar listas salvas" title="Fechar" disabled={busy.startsWith("delete:")} onClick={closeLists}><X size={20} /></button></div>
+      {!savedLists.length ? <div className="saved-lists-empty"><ListChecks size={26} /><p>Nenhuma lista salva.</p></div> : <div className="saved-lists">{savedLists.map((list) => {
+        const key = `${list.projectId}:${list.dateKey}`;
+        const project = projects.find((item) => item.id === list.projectId);
+        const deleting = busy === `delete:${key}`;
+        const confirming = deleteTarget === key;
+        const displayDate = list.dateKey.split("-").reverse().join("/");
+        return <div className="saved-list-row" key={key}><div><strong>{displayDate}</strong><span>{project?.name || list.projectId}</span><small>{list.count} sinais · {list.sent} enviados</small></div><div className="saved-list-actions"><button disabled={!!busy} onClick={() => viewList(list.projectId, list.dateKey)} aria-label={`Ver lista ${displayDate} ${project?.name || list.projectId}`}><Eye size={15} />Ver</button><button className={confirming ? "danger confirm" : "danger"} disabled={!!busy} onClick={() => deleteList(list.projectId, list.dateKey)} aria-label={`${confirming ? "Confirmar exclusão da" : "Apagar"} lista ${displayDate} ${project?.name || list.projectId}`}>{deleting ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}{deleting ? "Apagando…" : confirming ? "Confirmar" : "Apagar"}</button></div></div>;
+      })}</div>}
     </dialog>
     {notice && <div className={`toast ${notice.error ? "error" : "success"}`} role={notice.error ? "alert" : "status"}>{notice.error ? <AlertCircle size={18} /> : <Check size={18} />}<span>{notice.text}</span><button className="icon-button" aria-label="Fechar aviso" title="Fechar" onClick={() => setNotice(null)}><X size={16} /></button></div>}
   </div>;
