@@ -5,15 +5,21 @@ const dateKey = "2026-10-13";
 const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here" };
 const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
 const signals = [
+  { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
   { id: "one", time: "14:30", pair: "AUD/CAD", direction: "DOWN" },
   { id: "two", time: "14:45", pair: "AUD/NZD", direction: "UP" },
   { id: "three", time: "15:00", pair: "EUR/USD", direction: "DOWN", sentAt: "2026-10-13T17:55:00Z" },
 ].map((s) => ({ projectId: project.id, dateKey, market: "OTC", expiryMinutes: 5, reentries: 2, sourceText: "", ...s }));
+signals.push(
+  { id: "future-midnight", projectId: project.id, dateKey: "2026-10-14", time: "00:00", pair: "GBP/USD", market: "OTC", direction: "UP", expiryMinutes: 5, reentries: 2, sourceText: "" },
+  { id: "past-date", projectId: project.id, dateKey: "2026-10-12", time: "23:55", pair: "USD/JPY", market: "OTC", direction: "DOWN", expiryMinutes: 5, reentries: 2, sourceText: "" },
+);
 const config = { ok: true, projects: [project], messages, signals, workerLastSeen: new Date().toISOString(), logs: [{ id: "log1", projectId: project.id, kind: "signal", label: "EUR/USD DOWN", at: "2026-10-13T17:55:00Z", source: "schedule", status: "sent" }] };
 async function main() {
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await page.clock.install({ time: new Date("2026-10-13T11:49:00Z") });
     page.setDefaultNavigationTimeout(120000);
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -39,19 +45,25 @@ async function main() {
     await page.goto(baseUrl);
     await page.getByLabel("Data da lista").fill(dateKey);
     await page.locator(".signals-table tbody tr").first().waitFor();
-    assert.equal(await page.locator(".signals-table tbody tr").count(), 3);
+    assert.equal(await page.locator(".signals-table tbody tr").count(), 4);
+    assert.match(await page.locator(".signals-table tbody tr").first().innerText(), /Expirado/);
+    await page.getByLabel("Data da lista").fill("2026-10-14");
+    assert.match(await page.locator(".signals-table tbody tr").innerText(), /Aguardando/);
+    await page.getByLabel("Data da lista").fill("2026-10-12");
+    assert.match(await page.locator(".signals-table tbody tr").innerText(), /Expirado/);
+    await page.getByLabel("Data da lista").fill(dateKey);
     assert.equal(await page.locator("textarea:visible").count(), 0);
     await page.getByRole("button", { name: "Manuais", exact: true }).click();
     assert.equal(await page.locator(".signals-table tbody tr").count(), 1);
     await page.getByRole("button", { name: "Automáticos", exact: true }).click();
-    assert.equal(await page.locator(".signals-table tbody tr").count(), 2);
+    assert.equal(await page.locator(".signals-table tbody tr").count(), 3);
     await page.getByRole("button", { name: "Todos", exact: true }).click();
     await page.getByRole("button", { name: "Enviar agora AUD/CAD 14:30", exact: true }).click();
     await page.getByRole("status").filter({ hasText: "enviado" }).waitFor();
     assert.equal(lastSend.projectId, "expert_b");
     assert.equal(lastSend.time, "14:30");
     assert.equal(lastSend.kind, "signal");
-    assert.match(await page.locator(".signals-table tbody tr").first().innerText(), /Enviado/);
+    assert.match(await page.locator(".signals-table tbody tr").filter({ hasText: "AUD/CAD" }).innerText(), /Enviado/);
     for (const [label, kind] of [["Emoji de abertura", "morning_emoji"], ["Bom dia", "good_morning"], ["Início das análises", "analysis_start"], ["Boa noite", "good_night"]]) {
       await page.getByRole("button", { name: `Testar ${label}`, exact: true }).click();
       await page.getByRole("status").filter({ hasText: `${label} enviada ao canal` }).waitFor();

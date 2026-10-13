@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Clock3, Import, ListChecks, Loader2, Moon, Radio, Send, Settings, Sun, Sunrise, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseSignalInput, validateSignalTime } from "../lib/signals";
+import { isSignalExpired, parseSignalInput, validateSignalTime } from "../lib/signals";
 import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
 
 type Project = ProjectSettings & { botTokenConfigured?: boolean };
@@ -129,7 +129,7 @@ export default function Home() {
       if (result.requiresConfirmation) { setReplaceWarning(result.error || "Já existe uma lista para esta data."); return; }
       if (!result.ok) throw new Error(result.error || "Erro ao importar");
       setRawText(""); setReplaceWarning(""); dialogRef.current?.close(); importButtonRef.current?.focus();
-      setNotice({ text: `${result.created?.length || 0} sinais salvos.${result.skippedPast?.length ? ` ${result.skippedPast.length} horários vencidos ignorados.` : ""}` });
+      setNotice({ text: `${result.created?.length || 0} sinais salvos.${result.expired ? ` ${result.expired} já estavam expirados e ficaram disponíveis apenas para envio manual.` : ""}` });
       await loadConfig();
     } catch (error) { setImportError(error instanceof Error ? error.message : "Erro ao importar"); }
     finally { setBusy(""); actionPending.current = false; }
@@ -195,13 +195,14 @@ export default function Home() {
               const result = manualResults[signal.id];
               const error = result?.error || (!result?.sent && signal.error);
               const sent = result?.sent || signal.sentAt;
-              const state = sent ? "Enviado" : error ? "Erro" : isAuto ? "Aguardando" : "Manual";
+              const expired = !sent && !error && isSignalExpired(signal.dateKey, signal.time, new Date(now));
+              const state = sent ? "Enviado" : error ? "Erro" : expired ? "Expirado" : isAuto ? "Aguardando" : "Manual";
               return <tr key={signal.id}>
                 <td data-label="Horário" className="signal-time">{signal.time}</td>
                 <td data-label="Ativo" className="asset"><strong>{signal.pair}</strong><small>{signal.market}</small></td>
                 <td data-label="Direção"><span className={`direction ${signal.direction === "UP" ? "buy" : "sell"}`}>{signal.direction === "UP" ? <ArrowUpRight size={15} /> : <ArrowDownLeft size={15} />}{signal.direction === "UP" ? "CALL / BUY" : "PUT / SELL"}</span></td>
                 <td data-label="Automático" className="auto-cell">{isAuto ? "Sim" : "Não"}</td>
-                <td data-label="Status">{error && !sent ? <button className="error-link" onClick={() => setNotice({ text: String(error), error: true })}><AlertCircle size={14} />Erro</button> : <span className={`signal-status ${sent ? "sent" : ""}`}>{sent && <Check size={14} />}{state}</span>}</td>
+                <td data-label="Status">{error && !sent ? <button className="error-link" onClick={() => setNotice({ text: String(error), error: true })}><AlertCircle size={14} />Erro</button> : <span className={`signal-status ${sent ? "sent" : expired ? "expired" : ""}`}>{sent && <Check size={14} />}{state}</span>}</td>
                 <td className="send-cell"><button disabled={!!busy || !selected?.chatId} onClick={() => sendSignalNow(signal)} aria-label={`Enviar agora ${signal.pair} ${signal.time}`}>{busy === signal.id ? <Loader2 size={14} className="spin" /> : <Send size={14} />}{busy === signal.id ? "Enviando…" : "Enviar agora"}</button></td>
               </tr>;
             })}

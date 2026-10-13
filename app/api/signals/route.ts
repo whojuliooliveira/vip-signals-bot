@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
+import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
 import { deleteSignalsByIds, loadStore, localDateKey, saveStore, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
@@ -61,5 +61,6 @@ export async function POST(request: NextRequest) {
 
   store.signals = sortSignalsByOperationDate([...store.signals, ...created]);
   await saveStore(store);
-  return NextResponse.json({ ok: true, parsed, errors: [], created, skippedPast: [], signals: store.signals });
+  const expired = created.filter((signal) => isSignalExpired(signal.dateKey, signal.time)).length;
+  return NextResponse.json({ ok: true, parsed, errors: [], created, expired, signals: store.signals });
 }

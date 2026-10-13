@@ -158,12 +158,11 @@ export function isOvernightSignalTime(time: string) {
 }
 
 export function operationDateKeyForRuntime(dateKey: string, time: string) {
-  return isOvernightSignalTime(time) ? addDays(dateKey, -1) : dateKey;
+  return dateKey;
 }
 
 export function scheduledAtMsForOperation(dateKey: string, time: string) {
-  const sendDateKey = isOvernightSignalTime(time) ? addDays(dateKey, 1) : dateKey;
-  return new Date(`${sendDateKey}T${time}:00-03:00`).getTime();
+  return new Date(`${dateKey}T${time}:00-03:00`).getTime();
 }
 
 export function scheduledSendAtMsForOperation(dateKey: string, time: string) {
@@ -186,6 +185,10 @@ export function isSignalDueNow(dateKey: string, time: string, now = new Date()) 
 
 export function signalSendWindowExpiresAtMs(dateKey: string, time: string) {
   return scheduledSendAtMsForOperation(dateKey, time) + signalGraceMinutes * 60_000;
+}
+
+export function isSignalExpired(dateKey: string, time: string, now = new Date()) {
+  return now.getTime() > signalSendWindowExpiresAtMs(dateKey, time);
 }
 
 export function sortSignalsByOperationDate<T extends { dateKey: string; time: string }>(signals: T[]) {
