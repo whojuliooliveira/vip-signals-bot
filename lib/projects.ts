@@ -46,6 +46,7 @@ export async function getProjectsConfig(): Promise<ProjectConfig[]> {
   const store = await loadStore();
   return envProjects.map((envProject) => {
     const saved = store.projects.find((item) => item.id === envProject.id);
+    const telegramAccount = saved?.telegramAccount || (envProject.id === "expert_b" ? undefined : { sendMode: "auto" as const });
     return {
       ...envProject,
       name: saved?.name || envProject.name,
@@ -56,7 +57,9 @@ export async function getProjectsConfig(): Promise<ProjectConfig[]> {
       brokerLabel: saved?.brokerLabel || envProject.brokerLabel,
       signalTemplates: saved?.signalTemplates,
       messageTemplates: saved?.messageTemplates,
-      telegramAccount: saved?.telegramAccount || (envProject.id === "expert_b" ? undefined : { sendMode: "auto" }),
+      telegramAccount: envProject.language === "es"
+        ? { ...telegramAccount, sendMode: "user" }
+        : telegramAccount,
     };
   });
 }
@@ -77,6 +80,8 @@ export async function getProjectConfig(id: string): Promise<ProjectConfig | unde
     brokerLabel: saved.brokerLabel,
     signalTemplates: saved.signalTemplates,
     messageTemplates: saved.messageTemplates,
-    telegramAccount: saved.telegramAccount,
+    telegramAccount: saved.language === "es"
+      ? { ...saved.telegramAccount, sendMode: "user" }
+      : saved.telegramAccount,
   };
 }

@@ -35,6 +35,7 @@ export type CapturedTemplate = {
 export type CaptureSession = {
   id: string;
   projectId: string;
+  sourceProjectId?: string;
   kind: TemplateKind;
   status: CaptureStatus;
   startedAt: string;

@@ -43,12 +43,12 @@ export async function sendTelegramUserMessage(payload: SendTelegramMessage, acco
   const credentials = telegramUserCredentials(account);
   const client = await getTelegramUserClient(account);
   const entity = await resolveTargetEntity(client, payload.chatId, payload.chatTitle, credentials.targetPeer);
-  const message = payload.entities !== undefined ? payload.text : withFallbackTextLink(payload.text, payload);
+  const prepared = withFallbackTextLink(payload.text, payload, payload.entities);
 
   const sent = await client.sendMessage(entity, {
-    message,
-    ...(payload.entities !== undefined
-      ? { formattingEntities: toTelegramUserEntities(payload.text, payload.entities) }
+    message: prepared.text,
+    ...(prepared.entities !== undefined
+      ? { formattingEntities: toTelegramUserEntities(prepared.text, prepared.entities) }
       : { parseMode: "html" }),
     linkPreview: false,
   });
@@ -114,12 +114,21 @@ function normalizeBotChatId(chatId: string) {
   return value;
 }
 
-function withFallbackTextLink(text: string, payload: SendTelegramMessage) {
-  if (/<a\s/i.test(text)) return text;
+function withFallbackTextLink(text: string, payload: SendTelegramMessage, entities?: SendTelegramMessage["entities"]) {
   const button = payload.buttons?.flat()?.find((item) => item.url)
     || (payload.buttonText && payload.buttonUrl ? { text: payload.buttonText, url: payload.buttonUrl } : undefined);
-  if (!button) return text;
-  return `${text}\n\n<a href="${escapeHtml(button.url)}">${escapeHtml(button.text)}</a>`;
+  if (!button || text.includes(button.url) || entities?.some((item) => item.type === "text_link" && item.url === button.url)) {
+    return { text, entities };
+  }
+  if (entities !== undefined) {
+    const prefix = "\n\n› ";
+    return {
+      text: `${text}${prefix}${button.text}`,
+      entities: [...entities, { type: "text_link", offset: text.length + prefix.length, length: button.text.length, url: button.url }],
+    };
+  }
+  if (/<a\s/i.test(text)) return { text, entities };
+  return { text: `${text}\n\n<a href="${escapeHtml(button.url)}">${escapeHtml(button.text)}</a>`, entities };
 }
 
 function escapeHtml(value: string) {

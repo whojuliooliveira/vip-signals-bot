@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
     for (const projectId of projectIds) {
       const project = await getProjectConfig(String(projectId));
       if (!project) throw new Error(`Unknown project: ${projectId}`);
-      if (!project.botToken) throw new Error(`Missing bot token for ${project.name}`);
       if (!project.chatId) throw new Error(`Missing chat id for ${project.name}`);
 
       const message = body.kind === "custom"

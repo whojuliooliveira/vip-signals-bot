@@ -428,6 +428,21 @@ Depois disso, o navegador e o computador podem ser desligados.
 9. Se houver erro de sessao, abra **Configuracoes**, selecione o canal e use **Trocar conta**.
 10. Se o horario ja expirou, use **Enviar agora** ou importe uma lista corrigida; o automatico nao faz catch-up.
 
+## Espanhol sem bot no canal
+
+O projeto espanhol opera somente pela conta Telegram conectada. Nenhum bot precisa participar do canal espanhol.
+
+1. Em **Configuracoes**, selecione o canal espanhol.
+2. Informe o Chat ID do canal espanhol ou use **Destino alternativo** com `@usuario_do_canal`.
+3. Conecte uma conta Telegram que seja administradora do canal espanhol e tenha permissao para publicar.
+4. Abra **Modelos** e escolha o modelo espanhol que deseja capturar.
+5. Clique em **Capturar modelo**.
+6. Publique o modelo em espanhol no canal ingles. O bot do ingles faz somente a leitura dessa mensagem.
+7. O painel salva o modelo no projeto espanhol, sem substituir os modelos ingleses.
+8. Teste o modelo pelo painel com o canal espanhol selecionado.
+
+Envios manuais e automaticos do espanhol usam sempre a conta conectada. Texto, formatacao, links e emojis personalizados sao preservados. Modelos com foto, video, animacao ou documento ainda exigem um transporte de midia compativel e nao fazem parte do modo espanhol sem bot.
+
 ## Seguranca operacional
 
 Por decisao operacional expressamente confirmada, o painel esta publico e nao pede senha. Isso tambem deixa publicas as acoes de enviar, alterar configuracoes, apagar listas e iniciar a troca de conta para quem conhecer a URL. A conclusao da conexao ainda exige o codigo oficial do Telegram e a senha 2FA quando habilitada.

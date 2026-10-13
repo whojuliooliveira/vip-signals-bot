@@ -14,7 +14,7 @@ Consulte [docs/AUTOMACAO-OPERACIONAL.md](docs/AUTOMACAO-OPERACIONAL.md) para o f
 - Envio automatico de sinais cinco minutos antes do horario.
 - Canais, contas Telegram, modelos e links separados por idioma.
 - Conexao e troca de conta Telegram diretamente no painel.
-- Modelos capturados diretamente do Telegram.
+- Modelos capturados diretamente do Telegram, inclusive modelos espanhois lidos pelo canal ingles.
 - Mensagens padrao com agenda configuravel.
 - Historico de envios e heartbeat operacional.
 - Gerenciamento de listas por canal e data.
@@ -33,6 +33,6 @@ Abra `http://127.0.0.1:5180`.
 
 Configure as variaveis da `.env.example` no projeto da Vercel.
 
-O bot precisa estar como admin nos dois canais/grupos com permissao de postar.
+O bot precisa estar como admin apenas no canal ingles, usado tambem como origem de captura dos modelos espanhois. O canal espanhol recebe as mensagens pela conta Telegram conectada e nao precisa ter bot.
 
 O worker do EasyPanel chama `/api/run-schedule` com o `CRON_SECRET`. O Supabase guarda listas, configuracoes, modelos e historico.

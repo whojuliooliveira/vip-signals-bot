@@ -3,6 +3,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || "C:/Users/julio_r7nr
 const baseUrl = process.env.UI_TEST_URL || "http://127.0.0.1:5187";
 const dateKey = "2026-10-13";
 const project = { id: "expert_b", name: "Tom Reed | VIP Signals", enabled: true, language: "en", chatId: "-100123", botTokenConfigured: true, link: "https://example.com", brokerLabel: "Click here", telegramAccount: { sendMode: "auto", status: "disconnected", sessionConfigured: false, sharedCredentialsConfigured: true } };
+const spanishProject = { id: "expert_a", name: "José Álvarez | Señales VIP", enabled: true, language: "es", chatId: "-100456", botTokenConfigured: false, link: "https://example.es", brokerLabel: "Haz clic aquí", telegramAccount: { sendMode: "user", status: "connected", sessionConfigured: true, sharedCredentialsConfigured: true, accountLabel: "Cuenta Test" } };
 const messages = ["morning_emoji", "good_morning", "analysis_start", "good_night"].map((kind) => ({ id: kind, kind, label: kind, enabled: true, projects: [project.id], textByLanguage: { en: kind }, timeByDay: { weekday: "07:00", saturday: "08:00", sunday: "09:00" } }));
 const signals = [
   { id: "expired", time: "00:00", pair: "CHF/JPY", direction: "DOWN" },
@@ -14,7 +15,7 @@ signals.push(
   { id: "future-midnight", projectId: project.id, dateKey: "2026-10-14", time: "00:00", pair: "GBP/USD", market: "OTC", direction: "UP", expiryMinutes: 5, reentries: 2, sourceText: "" },
   { id: "past-date", projectId: project.id, dateKey: "2026-10-12", time: "23:55", pair: "USD/JPY", market: "OTC", direction: "DOWN", expiryMinutes: 5, reentries: 2, sourceText: "" },
 );
-const config = { ok: true, projects: [project], messages, signals, workerLastSeen: new Date().toISOString(), logs: [{ id: "log1", projectId: project.id, kind: "signal", label: "EUR/USD DOWN", at: "2026-10-13T17:55:00Z", source: "schedule", status: "sent" }] };
+const config = { ok: true, projects: [project, spanishProject], messages, signals, workerLastSeen: new Date().toISOString(), logs: [{ id: "log1", projectId: project.id, kind: "signal", label: "EUR/USD DOWN", at: "2026-10-13T17:55:00Z", source: "schedule", status: "sent" }] };
 async function main() {
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
@@ -31,7 +32,7 @@ async function main() {
     let telegramConnected = false;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      if (path === "/api/config") return route.fulfill({ json: { ...config, projects: [{ ...project, telegramAccount: telegramConnected ? { sendMode: "auto", status: "connected", sessionConfigured: true, accountLabel: "Tom Test (@tomtest)" } : project.telegramAccount }], signals: currentSignals } });
+      if (path === "/api/config") return route.fulfill({ json: { ...config, projects: [{ ...project, telegramAccount: telegramConnected ? { sendMode: "auto", status: "connected", sessionConfigured: true, accountLabel: "Tom Test (@tomtest)" } : project.telegramAccount }, spanishProject], signals: currentSignals } });
       if (path === "/api/telegram/connect") {
         const payload = route.request().postDataJSON();
         if (payload.action === "start") return route.fulfill({ json: { ok: true, status: "code_sent", viaApp: true } });
@@ -122,6 +123,11 @@ async function main() {
     await page.getByRole("button", { name: "Confirmar código", exact: true }).click();
     await page.locator(".telegram-dialog").waitFor({ state: "hidden" });
     await page.getByText("Tom Test (@tomtest)", { exact: true }).waitFor();
+    await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_a");
+    assert.equal(await page.getByLabel("Token do bot").count(), 0);
+    assert.equal(await page.getByLabel("Forma de envio").inputValue(), "user");
+    assert.equal(await page.getByLabel("Forma de envio").isDisabled(), true);
+    await page.getByRole("combobox", { name: "Canal", exact: true }).selectOption("expert_b");
     await page.getByRole("button", { name: "Lista do dia", exact: true }).click();
     await page.getByRole("button", { name: "Fechar aviso" }).click();
     for (const [name, width, height] of [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]]) {
@@ -130,7 +136,7 @@ async function main() {
       await page.screenshot({ path: `data/operations-${name}.png`, fullPage: true });
     }
     assert.deepEqual(errors, []);
-    console.log("PASS: lists, sends, import, independent Telegram account connection, desktop/tablet/mobile");
+    console.log("PASS: lists, sends, import, Spanish account-only mode, independent Telegram connection, desktop/tablet/mobile");
   } finally { await browser.close(); }
 }
 main().catch((error) => { console.error(error); process.exit(1); });

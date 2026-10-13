@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProjectConfig } from "../../../../lib/projects";
+import { getProjectConfig, getProjectsConfig, type ProjectConfig } from "../../../../lib/projects";
 import { loadStore, saveStore, uid, type CapturedTemplate, type TemplateKind } from "../../../../lib/store";
 import { getTelegramUpdates, telegramMessageToHtml, updateMessage, type TelegramCapturedMessage, type TelegramEntity } from "../../../../lib/telegram";
 
@@ -13,13 +13,13 @@ export async function POST(request: NextRequest) {
     if (!isTemplateKind(kind)) throw new Error("Tipo de modelo inválido.");
     const project = await getProjectConfig(projectId);
     if (!project) throw new Error("Projeto não encontrado.");
-    if (!project.botToken) throw new Error("Token do bot não configurado.");
-    if (!project.chatId) throw new Error("Chat ID do canal não configurado.");
+    const sourceProject = await captureSourceFor(project);
 
     const store = await loadStore();
     const session = {
       id: uid("cap"),
       projectId: project.id,
+      sourceProjectId: sourceProject.id,
       kind,
       status: "waiting" as const,
       startedAt: new Date().toISOString(),
@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       session,
-      instruction: `Envie agora o modelo no canal ${project.name}. Vou capturar automaticamente.`,
+      instruction: sourceProject.id === project.id
+        ? `Envie agora o modelo no canal ${project.name}. Vou capturar automaticamente.`
+        : `Envie agora o modelo em ${sourceProject.name}. Ele será salvo somente para ${project.name}.`,
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Erro desconhecido" }, { status: 500 });
@@ -55,10 +57,13 @@ export async function GET(request: NextRequest) {
 
     const project = await getProjectConfig(session.projectId);
     if (!project) throw new Error("Projeto não encontrado.");
-    if (!project.botToken || !project.chatId) throw new Error("Bot ou Chat ID não configurado.");
+    const sourceProject = session.sourceProjectId
+      ? await getProjectConfig(session.sourceProjectId)
+      : await captureSourceFor(project);
+    if (!sourceProject?.botToken || !sourceProject.chatId) throw new Error("Canal de captura não configurado.");
 
-    const updates = await getTelegramUpdates(project.botToken);
-    const message = findMessageAfter(updates.map(updateMessage).filter(Boolean) as TelegramCapturedMessage[], project.chatId, startedAtMs);
+    const updates = await getTelegramUpdates(sourceProject.botToken);
+    const message = findMessageAfter(updates.map(updateMessage).filter(Boolean) as TelegramCapturedMessage[], sourceProject.chatId, startedAtMs);
     if (!message) return NextResponse.json({ ok: true, session });
 
     const captured = capturedTemplateFromMessage(session.kind, message, project.name, project.link);
@@ -76,6 +81,17 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Erro desconhecido" }, { status: 500 });
   }
+}
+
+async function captureSourceFor(project: ProjectConfig) {
+  if (project.language !== "es") {
+    if (!project.botToken || !project.chatId) throw new Error("Bot ou Chat ID do canal não configurado.");
+    return project;
+  }
+
+  const source = (await getProjectsConfig()).find((item) => item.language === "en" && item.botToken && item.chatId);
+  if (!source) throw new Error("Configure o bot e o Chat ID do canal inglês para capturar os modelos do espanhol.");
+  return source;
 }
 
 function isTemplateKind(value: string): value is TemplateKind {
