@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { hasSupabase, supabaseDelete, supabaseSelect, supabaseUpsert } from "./supabase";
+import { hasSupabase, supabaseDelete, supabaseSelect, supabaseSelectAll, supabaseUpsert } from "./supabase";
 import type { TelegramEntity } from "./telegram";
 
 export type DayMode = "weekday" | "saturday" | "sunday";
@@ -296,9 +296,9 @@ async function loadSupabaseStore(): Promise<AppStore> {
   const [projectRows, messageRows, signalRows, logRows, keyRows, captureRows] = await Promise.all([
     supabaseSelect<any>("projects", "select=*"),
     supabaseSelect<any>("auto_messages", "select=*"),
-    supabaseSelect<any>("signals", "select=*"),
+    supabaseSelectAll<any>("signals", "select=*"),
     supabaseSelect<any>("send_logs", "select=*&order=at.desc&limit=1000"),
-    supabaseSelect<any>("schedule_keys", "select=*"),
+    supabaseSelectAll<any>("schedule_keys", "select=*"),
     supabaseSelect<any>("capture_sessions", "select=*"),
   ]);
 

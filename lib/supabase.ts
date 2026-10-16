@@ -15,6 +15,24 @@ export async function supabaseSelect<T>(table: string, query = "select=*") {
   return await response.json() as T[];
 }
 
+export async function supabaseSelectAll<T>(table: string, query = "select=*", pageSize = 1000) {
+  if (!supabaseUrl || !serviceKey) throw new Error("Supabase não configurado.");
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${table}?${query}`, {
+      headers: {
+        ...supabaseHeaders(),
+        Range: `${offset}-${offset + pageSize - 1}`,
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`Supabase select ${table}: ${await response.text()}`);
+    const page = await response.json() as T[];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
 export async function supabaseUpsert<T extends Record<string, unknown>>(table: string, rows: T[], conflict = "id") {
   if (!supabaseUrl || !serviceKey) throw new Error("Supabase não configurado.");
   if (!rows.length) return;
