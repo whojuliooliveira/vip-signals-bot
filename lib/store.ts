@@ -417,6 +417,14 @@ export async function deleteSignalsByIds(ids: string[]) {
   }
 }
 
+export async function deleteSignalList(projectId: string, dateKey: string) {
+  if (!hasSupabase()) return;
+  await supabaseDelete(
+    "signals",
+    `project_id=eq.${encodeURIComponent(projectId)}&date_key=eq.${encodeURIComponent(dateKey)}`,
+  );
+}
+
 function signalRow(signal: ScheduledSignal) {
   return {
     id: signal.id,

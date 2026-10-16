@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
-import { deleteSignalsByIds, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
+import { deleteSignalList, deleteSignalsByIds, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest) {
   const store = await loadStore();
   const removed = store.signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey);
   store.signals = store.signals.filter((signal) => signal.projectId !== projectId || signal.dateKey !== dateKey);
-  await deleteSignalsByIds(removed.map((signal) => signal.id));
+  await deleteSignalList(projectId, dateKey);
   await saveSignalChanges(store, []);
 
   return NextResponse.json({ ok: true, deleted: removed.length });
