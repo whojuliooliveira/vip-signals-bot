@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
-import { deleteSignalList, deleteSignalsByIds, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
+import { deleteSignalList, deleteSignalsByIds, loadSignalList, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
   }
   const parsed = parsedResult.signals;
   const store = await loadStore();
-  const pending = store.signals.filter((signal) => signal.projectId === selectedProjectId && signal.dateKey === dateKey && !signal.sentAt);
+  const currentList = await loadSignalList(selectedProjectId, dateKey, store);
+  const pending = currentList.filter((signal) => !signal.sentAt);
   const incomingKeys = new Set(parsed.map((signal) => `${dateKey}:${selectedProjectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
   const wouldRemove = pending.filter((signal) => !incomingKeys.has(`${signal.dateKey}:${signal.projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
 
@@ -35,7 +36,10 @@ export async function POST(request: NextRequest) {
     store.signals = store.signals.filter((signal) => !removeIds.has(signal.id));
   }
 
-  const existing = new Set(store.signals.map((signal) => `${signal.dateKey}:${signal.projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
+  const removedIds = new Set(wouldRemove.map((signal) => signal.id));
+  const existing = new Set(currentList
+    .filter((signal) => !removedIds.has(signal.id))
+    .map((signal) => `${signal.dateKey}:${signal.projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
   const created: ScheduledSignal[] = [];
 
   for (const signal of parsed) {
@@ -80,7 +84,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const store = await loadStore();
-  const removed = store.signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey);
+  const removed = await loadSignalList(projectId, dateKey, store);
   store.signals = store.signals.filter((signal) => signal.projectId !== projectId || signal.dateKey !== dateKey);
   await deleteSignalList(projectId, dateKey);
   await saveSignalChanges(store, []);

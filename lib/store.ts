@@ -280,6 +280,18 @@ export async function loadStore(): Promise<AppStore> {
   }
 }
 
+export async function loadSignalList(projectId: string, dateKey: string, loadedStore?: AppStore) {
+  if (!hasSupabase()) {
+    const store = loadedStore || await loadStore();
+    return store.signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey);
+  }
+  const rows = await supabaseSelect<any>(
+    "signals",
+    `select=*&project_id=eq.${encodeURIComponent(projectId)}&date_key=eq.${encodeURIComponent(dateKey)}`,
+  );
+  return rows.map(signalFromRow);
+}
+
 async function loadSupabaseStore(): Promise<AppStore> {
   const [projectRows, messageRows, signalRows, logRows, keyRows, captureRows] = await Promise.all([
     supabaseSelect<any>("projects", "select=*"),
@@ -305,25 +317,29 @@ async function loadSupabaseStore(): Promise<AppStore> {
       telegramAccount: row.telegram_account || undefined,
       enabled: row.enabled,
     }))),
-    signals: signalRows.map((row) => ({
-      id: row.id,
-      dateKey: row.date_key,
-      projectId: row.project_id,
-      pair: row.pair,
-      market: row.market,
-      direction: row.direction,
-      time: row.signal_time,
-      expiryMinutes: row.expiry_minutes,
-      reentries: row.reentries,
-      sourceText: row.source_text,
-      createdAt: row.created_at,
-      sentAt: row.sent_at || undefined,
-      messageId: row.message_id || undefined,
-      error: row.error || undefined,
-    })),
+    signals: signalRows.map(signalFromRow),
     logs: logRows.map((row) => row.payload),
     sentScheduleKeys: keyRows.filter((row) => row.id !== "worker-heartbeat").map((row) => row.id),
     captureSessions: captureRows.map((row) => row.payload),
+  };
+}
+
+function signalFromRow(row: any): ScheduledSignal {
+  return {
+    id: row.id,
+    dateKey: row.date_key,
+    projectId: row.project_id,
+    pair: row.pair,
+    market: row.market,
+    direction: row.direction,
+    time: row.signal_time,
+    expiryMinutes: row.expiry_minutes,
+    reentries: row.reentries,
+    sourceText: row.source_text,
+    createdAt: row.created_at,
+    sentAt: row.sent_at || undefined,
+    messageId: row.message_id || undefined,
+    error: row.error || undefined,
   };
 }
 
