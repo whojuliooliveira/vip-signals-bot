@@ -5,7 +5,7 @@ import { renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
 import { standardMessagePayload } from "../../../lib/standardMessages";
 import { hasSupabase, supabaseUpsert } from "../../../lib/supabase";
-import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveStore, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
+import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveScheduleChanges, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
 
 function authorized(request: NextRequest) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -50,8 +50,12 @@ async function runSchedule(request: NextRequest) {
       }
 
       const body = message.textByLanguage[project.language] || message.textByLanguage.en || message.textByLanguage.es || "";
+      let delivered = false;
+      let deliveredMessageId: number | undefined;
       try {
         const sent = await sendTelegramMessage(project.botToken, standardMessagePayload(project, message), project.telegramAccount);
+        delivered = true;
+        deliveredMessageId = sent?.message_id;
 
         store.sentScheduleKeys.push(key);
         const log: SendLog = {
@@ -60,14 +64,15 @@ async function runSchedule(request: NextRequest) {
           source: "schedule",
           projectId: project.id,
           projectName: project.name,
-          messageId: sent?.message_id,
+          messageId: deliveredMessageId,
           kind: message.kind,
           label: message.label,
           text: body,
           status: "sent",
         };
         store.logs = [log, ...store.logs].slice(0, 1000);
-        results.push({ projectId: project.id, label: message.label, messageId: sent?.message_id });
+        await saveScheduleChanges(store, [], [log], [key]);
+        results.push({ projectId: project.id, label: message.label, messageId: deliveredMessageId });
       } catch (error) {
         const log: SendLog = {
           id: uid("log"),
@@ -75,13 +80,15 @@ async function runSchedule(request: NextRequest) {
           source: "schedule",
           projectId: project.id,
           projectName: project.name,
+          messageId: deliveredMessageId,
           kind: message.kind,
           label: message.label,
           text: body,
-          status: "failed",
+          status: delivered ? "sent" : "failed",
           error: error instanceof Error ? error.message : "Unknown error",
         };
         store.logs = [log, ...store.logs].slice(0, 1000);
+        await saveScheduleChanges(store, [], [log], delivered ? [key] : []);
         results.push({ projectId: project.id, label: message.label, error: error instanceof Error ? error.message : "Unknown error" });
       }
     }
@@ -136,6 +143,7 @@ async function runSchedule(request: NextRequest) {
         status: "sent",
       };
       store.logs = [log, ...store.logs].slice(0, 1000);
+      await saveScheduleChanges(store, [signal], [log], []);
       results.push({ projectId: project.id, label: `${signal.pair} ${signal.direction}`, messageId: sent?.message_id });
     } catch (error) {
       signal.error = error instanceof Error ? error.message : "Unknown error";
@@ -152,12 +160,12 @@ async function runSchedule(request: NextRequest) {
         error: signal.error,
       };
       store.logs = [log, ...store.logs].slice(0, 1000);
+      await saveScheduleChanges(store, [signal], [log], []);
       results.push({ projectId: signal.projectId, label: `${signal.pair} ${signal.direction}`, error: signal.error });
     }
   }
 
   store.sentScheduleKeys = store.sentScheduleKeys.slice(-5000);
-  if (results.some((item) => !('skipped' in item))) await saveStore(store);
   if (hasSupabase()) await supabaseUpsert("schedule_keys", [{ id: "worker-heartbeat", created_at: new Date().toISOString() }]);
   return NextResponse.json({ ok: true, mode, time, dateKey, due: dueMessages.length + dueSignals.length, results });
 }

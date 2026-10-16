@@ -367,38 +367,77 @@ async function saveSupabaseStore(store: AppStore) {
       updated_at: new Date().toISOString(),
     }))),
     supabaseUpsert("auto_messages", store.messages.map((message) => ({ id: message.id, payload: message, updated_at: new Date().toISOString() }))),
-    supabaseUpsert("signals", store.signals.map((signal) => ({
-      id: signal.id,
-      date_key: signal.dateKey,
-      project_id: signal.projectId,
-      pair: signal.pair,
-      market: signal.market,
-      direction: signal.direction,
-      signal_time: signal.time,
-      expiry_minutes: signal.expiryMinutes,
-      reentries: signal.reentries,
-      source_text: signal.sourceText,
-      created_at: signal.createdAt,
-      sent_at: signal.sentAt || null,
-      message_id: signal.messageId || null,
-      error: signal.error || null,
-    }))),
-    supabaseUpsert("send_logs", store.logs.map((log) => ({ id: log.id, at: log.at, project_id: log.projectId, status: log.status, payload: log }))),
+    supabaseUpsert("send_logs", store.logs.map(logRow)),
     supabaseUpsert("schedule_keys", store.sentScheduleKeys.map((key) => ({ id: key, created_at: new Date().toISOString() }))),
     supabaseUpsert("capture_sessions", store.captureSessions.map((session) => ({ id: session.id, project_id: session.projectId, status: session.status, payload: session, updated_at: new Date().toISOString() }))),
   ]);
 }
 
+export async function saveSignalChanges(store: AppStore, changedSignals: ScheduledSignal[]) {
+  if (hasSupabase()) {
+    await supabaseUpsert("signals", changedSignals.map(signalRow));
+    return;
+  }
+  await saveStore(store);
+}
+
+export async function saveScheduleChanges(
+  store: AppStore,
+  changedSignals: ScheduledSignal[],
+  changedLogs: SendLog[],
+  newScheduleKeys: string[],
+) {
+  if (hasSupabase()) {
+    await Promise.all([
+      supabaseUpsert("signals", changedSignals.map(signalRow)),
+      supabaseUpsert("send_logs", changedLogs.map(logRow)),
+      supabaseUpsert("schedule_keys", newScheduleKeys.map((key) => ({ id: key, created_at: new Date().toISOString() }))),
+    ]);
+    return;
+  }
+  await saveStore(store);
+}
+
 export async function appendLog(log: SendLog) {
   const store = await loadStore();
   store.logs = [log, ...store.logs].slice(0, 1000);
+  if (hasSupabase()) {
+    await supabaseUpsert("send_logs", [logRow(log)]);
+    return;
+  }
   await saveStore(store);
 }
 
 export async function deleteSignalsByIds(ids: string[]) {
   if (!ids.length || !hasSupabase()) return;
-  const quoted = ids.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
-  await supabaseDelete("signals", `id=in.(${quoted})`);
+  const chunkSize = 100;
+  for (let index = 0; index < ids.length; index += chunkSize) {
+    const quoted = ids.slice(index, index + chunkSize).map((id) => `"${id.replace(/"/g, "")}"`).join(",");
+    await supabaseDelete("signals", `id=in.(${quoted})`);
+  }
+}
+
+function signalRow(signal: ScheduledSignal) {
+  return {
+    id: signal.id,
+    date_key: signal.dateKey,
+    project_id: signal.projectId,
+    pair: signal.pair,
+    market: signal.market,
+    direction: signal.direction,
+    signal_time: signal.time,
+    expiry_minutes: signal.expiryMinutes,
+    reentries: signal.reentries,
+    source_text: signal.sourceText,
+    created_at: signal.createdAt,
+    sent_at: signal.sentAt || null,
+    message_id: signal.messageId || null,
+    error: signal.error || null,
+  };
+}
+
+function logRow(log: SendLog) {
+  return { id: log.id, at: log.at, project_id: log.projectId, status: log.status, payload: log };
 }
 
 export function scheduledKey(dateKey: string, time: string, messageId: string, projectId: string) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
-import { deleteSignalsByIds, loadStore, localDateKey, saveStore, uid, type ScheduledSignal } from "../../../lib/store";
+import { deleteSignalsByIds, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.confirmReplace) {
-    store.signals = store.signals.filter((signal) => signal.projectId !== selectedProjectId || signal.dateKey !== dateKey || Boolean(signal.sentAt));
-    await deleteSignalsByIds(wouldRemove.map((signal) => signal.id));
+    const removeIds = new Set(wouldRemove.map((signal) => signal.id));
+    store.signals = store.signals.filter((signal) => !removeIds.has(signal.id));
   }
 
   const existing = new Set(store.signals.map((signal) => `${signal.dateKey}:${signal.projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`));
@@ -57,12 +57,18 @@ export async function POST(request: NextRequest) {
       manualOnly: Boolean(signal.validationError),
       validationError: signal.validationError,
     });
+    existing.add(key);
   }
 
   store.signals = sortSignalsByOperationDate([...store.signals, ...created]);
-  await saveStore(store);
+  // Persist only this import. Re-saving the complete historical store makes large
+  // lists exceed the serverless request window and can leave a partial import.
+  await saveSignalChanges(store, created);
+  // New rows go first: if removal fails, the previous list remains visible instead
+  // of disappearing before the replacement has been safely stored.
+  if (body.confirmReplace) await deleteSignalsByIds(wouldRemove.map((signal) => signal.id));
   const expired = created.filter((signal) => isSignalExpired(signal.dateKey, signal.time)).length;
-  return NextResponse.json({ ok: true, parsed, errors: [], created, expired, signals: store.signals });
+  return NextResponse.json({ ok: true, createdCount: created.length, expired });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -77,7 +83,7 @@ export async function DELETE(request: NextRequest) {
   const removed = store.signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey);
   store.signals = store.signals.filter((signal) => signal.projectId !== projectId || signal.dateKey !== dateKey);
   await deleteSignalsByIds(removed.map((signal) => signal.id));
-  await saveStore(store);
+  await saveSignalChanges(store, []);
 
-  return NextResponse.json({ ok: true, deleted: removed.length, signals: store.signals });
+  return NextResponse.json({ ok: true, deleted: removed.length });
 }

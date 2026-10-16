@@ -30,6 +30,7 @@ async function main() {
     let currentSignals = [...signals];
     let deletedList;
     let telegramConnected = false;
+    let emptyImportResponse = false;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       if (path === "/api/config") return route.fulfill({ json: { ...config, projects: [{ ...project, telegramAccount: telegramConnected ? { sendMode: "auto", status: "connected", sessionConfigured: true, accountLabel: "Tom Test (@tomtest)" } : project.telegramAccount }, spanishProject], signals: currentSignals } });
@@ -44,6 +45,7 @@ async function main() {
         return route.fulfill({ json: { ok: true, results: [], messageId: 123 } });
       }
       if (path === "/api/signals") {
+        if (emptyImportResponse) return route.fulfill({ status: 504, body: "" });
         if (route.request().method() === "DELETE") {
           deletedList = route.request().postDataJSON();
           const before = currentSignals.length;
@@ -53,7 +55,7 @@ async function main() {
         imported++;
         const payload = route.request().postDataJSON();
         if (!payload.confirmReplace) return route.fulfill({ json: { ok: false, requiresConfirmation: true, error: "Lista existente. Substituir?" } });
-        return route.fulfill({ json: { ok: true, created: [{ id: "new" }], signals } });
+        return route.fulfill({ json: { ok: true, createdCount: 1 } });
       }
       return route.abort();
     });
@@ -107,6 +109,13 @@ async function main() {
     await page.getByRole("button", { name: "Salvar lista", exact: true }).click();
     await page.getByRole("button", { name: "Substituir lista", exact: true }).click();
     await page.locator(".import-dialog").waitFor({ state: "hidden" });
+    emptyImportResponse = true;
+    await page.getByRole("button", { name: "Importar lista", exact: true }).click();
+    await page.getByLabel("Lista de sinais").fill("M5;EURUSD-OTC;15:30;CALL");
+    await page.getByRole("button", { name: "Salvar lista", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Atualize a página para conferir a lista" }).waitFor();
+    emptyImportResponse = false;
+    await page.getByRole("button", { name: "Cancelar", exact: true }).click();
     failSend = true;
     await page.getByRole("button", { name: "Mensagens", exact: true }).click();
     await page.getByRole("button", { name: "Testar Bom dia", exact: true }).click();

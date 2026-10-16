@@ -28,9 +28,21 @@ function compactProjectName(name: string) {
 
 async function requestJson(url: string, body?: unknown, method = "POST") {
   const response = await fetch(url, body === undefined ? { cache: "no-store" } : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const result = await response.json();
+  const result = await readJsonResponse(response);
   if (!response.ok || !result.ok) throw new Error(result.error || "Não foi possível concluir. Tente novamente.");
   return result;
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error("O servidor não confirmou a operação. Atualize a página para conferir a lista antes de tentar novamente.");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("O servidor retornou uma resposta inválida. Atualize a página para conferir a lista antes de tentar novamente.");
+  }
 }
 
 export default function Home() {
@@ -181,7 +193,7 @@ export default function Home() {
     actionPending.current = true; setBusy(`delete:${key}`);
     try {
       const result = await requestJson("/api/signals", { projectId: listProjectId, dateKey: listDateKey }, "DELETE");
-      setDeleteTarget(""); setSignals(result.signals || []);
+      setDeleteTarget(""); await loadConfig();
       setNotice({ text: `Lista apagada. ${result.deleted || 0} sinais removidos.` });
     } catch (error) { setNotice({ text: error instanceof Error ? error.message : "Erro ao apagar a lista", error: true }); }
     finally { setBusy(""); actionPending.current = false; }
@@ -192,11 +204,11 @@ export default function Home() {
     actionPending.current = true; setBusy("import"); setImportError("");
     try {
       const response = await fetch("/api/signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, dateKey, rawText, confirmReplace }) });
-      const result = await response.json();
+      const result = await readJsonResponse(response);
       if (result.requiresConfirmation) { setReplaceWarning(result.error || "Já existe uma lista para esta data."); return; }
       if (!result.ok) throw new Error(result.error || "Erro ao importar");
       setRawText(""); setReplaceWarning(""); dialogRef.current?.close(); importButtonRef.current?.focus();
-      setNotice({ text: `${result.created?.length || 0} sinais salvos.${result.expired ? ` ${result.expired} já estavam expirados e ficaram disponíveis apenas para envio manual.` : ""}` });
+      setNotice({ text: `${result.createdCount ?? result.created?.length ?? 0} sinais salvos.${result.expired ? ` ${result.expired} já estavam expirados e ficaram disponíveis apenas para envio manual.` : ""}` });
       await loadConfig();
     } catch (error) { setImportError(error instanceof Error ? error.message : "Erro ao importar"); }
     finally { setBusy(""); actionPending.current = false; }

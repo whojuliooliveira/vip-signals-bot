@@ -17,17 +17,16 @@ export async function supabaseSelect<T>(table: string, query = "select=*") {
 
 export async function supabaseUpsert<T extends Record<string, unknown>>(table: string, rows: T[], conflict = "id") {
   if (!supabaseUrl || !serviceKey) throw new Error("Supabase não configurado.");
-  if (!rows.length) return [];
+  if (!rows.length) return;
   const response = await fetch(`${supabaseUrl}/rest/v1/${table}?on_conflict=${conflict}`, {
     method: "POST",
     headers: {
       ...supabaseHeaders(),
-      Prefer: "resolution=merge-duplicates,return=representation",
+      Prefer: "resolution=merge-duplicates,return=minimal",
     },
     body: JSON.stringify(rows),
   });
   if (!response.ok) throw new Error(`Supabase upsert ${table}: ${await response.text()}`);
-  return await response.json() as T[];
 }
 
 export async function supabaseDelete(table: string, query: string) {
