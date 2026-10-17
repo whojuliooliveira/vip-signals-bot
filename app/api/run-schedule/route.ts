@@ -97,7 +97,7 @@ async function runSchedule(request: NextRequest) {
   const dueSignals = store.signals.filter((signal) => (
     !signal.sentAt
     && !signal.manualOnly
-    && !validateSignalTime(signal.time)
+    && !validateSignalTime(signal.time, signal.dateKey)
     && isSignalDueNow(signal.dateKey, signal.time, now)
   ));
   for (const signal of dueSignals) {

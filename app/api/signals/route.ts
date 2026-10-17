@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate } from "../../../lib/signals";
+import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate, validateSignalTime } from "../../../lib/signals";
 import { deleteSignalList, deleteSignalsByIds, loadSignalList, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
 
 export async function POST(request: NextRequest) {
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     const projectId = selectedProjectId;
     const key = `${dateKey}:${projectId}:${signal.pair}:${signal.market}:${signal.direction}:${signal.time}`;
     if (existing.has(key)) continue;
+    const validationError = validateSignalTime(signal.time, dateKey);
     created.push({
       id: uid("sig"),
       dateKey,
@@ -58,8 +59,8 @@ export async function POST(request: NextRequest) {
       reentries: Number(body.reentries || 2),
       sourceText: signal.sourceText,
       createdAt: new Date().toISOString(),
-      manualOnly: Boolean(signal.validationError),
-      validationError: signal.validationError,
+      manualOnly: Boolean(validationError),
+      validationError: validationError || undefined,
     });
     existing.add(key);
   }

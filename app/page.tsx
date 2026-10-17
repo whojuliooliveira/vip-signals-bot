@@ -80,7 +80,7 @@ export default function Home() {
   const actionPending = useRef(false);
   const selected = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
-  const automatic = (signal: ScheduledSignal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time);
+  const automatic = (signal: ScheduledSignal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time, signal.dateKey);
   const upcoming = (signal: ScheduledSignal) => automatic(signal) && !signal.sentAt && !signal.error && !manualResults[signal.id]?.sent && !manualResults[signal.id]?.error && !isSignalExpired(signal.dateKey, signal.time, new Date(now));
   const dailySignals = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey).sort((a, b) => a.time.localeCompare(b.time) || a.pair.localeCompare(b.pair)), [signals, projectId, dateKey]);
   const visibleSignals = dailySignals.filter((signal) => filter === "all" || upcoming(signal));

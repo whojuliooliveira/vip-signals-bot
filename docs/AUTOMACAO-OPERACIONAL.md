@@ -1,4 +1,4 @@
-# Automacao operacional do VIP Signals Bot
+# Automacao operacional do Disparador De Sinais
 
 Documento verificado em 13/10/2026. Todos os horarios abaixo usam `America/Sao_Paulo` (Brasilia, UTC-3).
 
@@ -15,7 +15,7 @@ A automacao depende de quatro servicos remotos:
 
 O computador so volta a ser necessario para manutencao ou alteracao de codigo. A troca da conta Telegram passa a ser feita no proprio painel.
 
-Na verificacao que originou este documento, o painel publicado respondeu normalmente e o worker remoto estava atualizando o heartbeat. O estado atual deve ser conferido pelo indicador **Automatico conectado** no painel.
+Na verificacao que originou este documento, o painel publicado respondeu normalmente e o worker remoto estava atualizando o heartbeat. O estado atual deve ser conferido pelo indicador **Sistema online** na barra lateral.
 
 ## Arquitetura atual
 
@@ -72,9 +72,9 @@ O worker evita iniciar uma segunda verificacao enquanto a anterior ainda esta ro
 
 ### 1. Escolher canal e data
 
-No topo do painel:
+Na area **Listas** do painel:
 
-1. selecione o canal;
+1. selecione `Tom` ou `Jose`;
 2. selecione a data literal dos sinais;
 3. clique em **Importar lista**.
 
@@ -102,7 +102,7 @@ Linhas repetidas da mesma importacao sao ignoradas. Linhas que parecem sinais, m
 
 Um sinal entra no automatico quando atende simultaneamente a estas regras:
 
-- horario entre `07:20` e `03:30`;
+- horario entre `07:25` e `03:30` de segunda a sexta, entre `08:25` e `03:30` no sabado e entre `09:05` e `03:30` no domingo;
 - minuto terminado em `:55`, `:00`, `:05`, `:25`, `:30` ou `:35`;
 - ainda nao foi enviado;
 - a janela de envio ainda nao expirou.
@@ -219,6 +219,16 @@ Cada mensagem pode ser ativada/desativada e ter horario proprio. Os valores inic
 | Bom dia | 07:01 | 08:00 | 09:00 |
 | Inicio das analises | 07:15 | 08:15 | 09:00 |
 
+O primeiro sinal automatico respeita a abertura de cada dia e sai cinco minutos antes do horario da operacao:
+
+| Dia | Primeiro sinal | Envio |
+|---|---:|---:|
+| Segunda a sexta | 07:25 | 07:20 |
+| Sabado | 08:25 | 08:20 |
+| Domingo | 09:05 | 09:00 |
+
+Sinais anteriores a essas aberturas ficam manuais. A faixa da madrugada ate `03:30` continua valida para o encerramento da operacao do respectivo dia.
+
 Boa noite usa configuracao individual por dia da semana. As configuracoes salvas no painel/Supabase prevalecem sobre os valores iniciais do codigo.
 
 O horario de retorno escrito dentro do modelo de boa noite e dinamico pelo dia do disparo em Brasilia: segunda a sexta informa `7 a.m UTC-3`, sabado informa `8 a.m UTC-3` e domingo informa `9 a.m UTC-3`. A troca acontece no envio e preserva o restante do modelo capturado.
@@ -238,6 +248,8 @@ A janela das mensagens padrao vai do horario programado ate quatro minutos depoi
 ### Botao Testar
 
 O botao **Testar** envia uma copia imediata da mensagem ao canal. Ele nao marca a mensagem agendada como concluida e nao cancela o proximo envio automatico.
+
+Os testes ficam na area **Mensagens**, junto do historico de sucessos e erros. Eles foram removidos da tela de listas para manter a operacao diaria enxuta.
 
 ## Modelos e formatacao
 
@@ -316,13 +328,25 @@ A compatibilidade antiga do canal ingles depende de:
 
 Depois que uma conta e conectada pelo painel, esses dados ficam persistidos por canal no Supabase e prevalecem sobre a compatibilidade antiga.
 
-## Indicador Automatico conectado
+## Indicador Sistema online
 
 O EasyPanel chama a agenda e a API grava um heartbeat no Supabase.
 
-O painel mostra **Automatico conectado** quando o heartbeat tem menos de dois minutos. Isso confirma que o worker esta chamando a Vercel recentemente.
+O painel mostra **Sistema online** quando o heartbeat tem menos de dois minutos. Isso confirma que o worker esta chamando a Vercel recentemente.
 
-O indicador nao garante sozinho que o Telegram aceitou todas as mensagens. Para isso, confira **Ultimos envios** e o canal.
+O indicador nao garante sozinho que o Telegram aceitou todas as mensagens. Para isso, abra **Mensagens** e confira **Ultimos envios** do canal.
+
+## Pausa por canal
+
+Em **Configuracoes**, selecione `Tom` ou `Jose` e use o controle destacado no topo:
+
+- **Desativar** pausa sinais e mensagens automaticas somente daquele canal;
+- o outro canal continua operando;
+- envio manual continua disponivel;
+- **Ativar** libera novamente os proximos horarios ainda validos;
+- nao ha recuperacao dos horarios que expiraram durante a pausa.
+
+Espere o painel mostrar **Alteracoes salvas** antes de fechar.
 
 ## O que precisa permanecer ativo
 
@@ -406,14 +430,14 @@ O erro aparece no historico e/ou no status da linha.
 ## Checklist diario
 
 1. Abra o painel.
-2. Confirme **Automatico conectado**.
+2. Confirme **Sistema online**.
 3. Selecione canal e data correta.
 4. Importe a lista.
 5. Abra **Proximos** e confira o que realmente sera disparado.
 6. Abra **Todos** para conferir manuais e expirados.
 7. Use **Listas salvas** para validar canal, data e quantidade.
 8. Confirme no Telegram o primeiro envio do dia.
-9. Acompanhe **Ultimos envios** quando necessario.
+9. Abra **Mensagens** e acompanhe **Ultimos envios** quando necessario.
 
 Depois disso, o navegador e o computador podem ser desligados.
 
@@ -422,8 +446,8 @@ Depois disso, o navegador e o computador podem ser desligados.
 1. Veja se o indicador esta verde.
 2. Abra **Proximos** e confirme que o sinal ainda esta na janela futura.
 3. Confira se a data da lista esta correta.
-4. Confira se o canal esta ativo.
-5. Veja **Ultimos envios** e o status da linha.
+4. Em **Configuracoes**, confira se a automacao do canal esta **Ativa**.
+5. Em **Mensagens**, veja **Ultimos envios** e o status da linha.
 6. Confira o servico `vip-signals-bot` no EasyPanel.
 7. Confira os logs do worker procurando resposta `401`, erro da Vercel ou erro do Telegram.
 8. Se houver `401`, compare `CRON_SECRET` entre EasyPanel e Vercel.

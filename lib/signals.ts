@@ -43,7 +43,9 @@ const directionMap: Record<string, Direction> = {
 };
 
 const allowedSignalMinutes = new Set(["00", "05", "25", "30", "35", "55"]);
-const operationStart = "07:20";
+const weekdayOperationStart = "07:25";
+const saturdayOperationStart = "08:25";
+const sundayOperationStart = "09:05";
 const operationEnd = "03:30";
 const signalLeadMinutes = 5;
 const signalGraceMinutes = 5;
@@ -133,10 +135,11 @@ function looksLikeSignal(line: string) {
   return hasSeparatorFormat || (hasTime && hasAsset);
 }
 
-export function validateSignalTime(time: string) {
+export function validateSignalTime(time: string, dateKey?: string) {
   if (!time) return "Horário inválido.";
   const minute = time.slice(3, 5);
-  if (!isSignalTimeInTradingWindow(time)) {
+  const operationStart = signalOperationStart(dateKey);
+  if (!isSignalTimeInTradingWindow(time, dateKey)) {
     return `Horário fora da operação. Use sinais entre ${operationStart} e ${operationEnd} UTC-3.`;
   }
   if (!allowedSignalMinutes.has(minute)) {
@@ -145,11 +148,22 @@ export function validateSignalTime(time: string) {
   return "";
 }
 
-export function isSignalTimeInTradingWindow(time: string) {
+export function isSignalTimeInTradingWindow(time: string, dateKey?: string) {
   const minutes = timeToMinutes(time);
-  const start = timeToMinutes(operationStart);
+  const start = timeToMinutes(signalOperationStart(dateKey));
   const end = timeToMinutes(operationEnd);
   return minutes >= start || minutes <= end;
+}
+
+export function signalOperationStart(dateKey?: string) {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return weekdayOperationStart;
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+  }).format(new Date(`${dateKey}T12:00:00-03:00`)).toLowerCase();
+  if (weekday === "saturday") return saturdayOperationStart;
+  if (weekday === "sunday") return sundayOperationStart;
+  return weekdayOperationStart;
 }
 
 export function isOvernightSignalTime(time: string) {
