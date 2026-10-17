@@ -44,9 +44,10 @@ const directionMap: Record<string, Direction> = {
 
 const allowedSignalMinutes = new Set(["00", "05", "25", "30", "35", "55"]);
 const weekdayOperationStart = "07:25";
-const saturdayOperationStart = "08:25";
-const sundayOperationStart = "09:05";
-const operationEnd = "03:30";
+const saturdayOperationStart = "07:25";
+const sundayOperationStart = "10:00";
+const weekdayOperationEnd = "03:30";
+const weekendOperationEnd = "23:30";
 const signalLeadMinutes = 5;
 const signalGraceMinutes = 5;
 
@@ -139,8 +140,12 @@ export function validateSignalTime(time: string, dateKey?: string) {
   if (!time) return "Horário inválido.";
   const minute = time.slice(3, 5);
   const operationStart = signalOperationStart(dateKey);
+  const operationEnd = signalOperationEnd(dateKey);
   if (!isSignalTimeInTradingWindow(time, dateKey)) {
     return `Horário fora da operação. Use sinais entre ${operationStart} e ${operationEnd} UTC-3.`;
+  }
+  if (isSundayHourlyWindow(dateKey, time) && minute !== "00") {
+    return "No domingo, entre 10:00 e 15:00, somente um sinal por hora cheia entra no automático.";
   }
   if (!allowedSignalMinutes.has(minute)) {
     return "Minuto não permitido. Use apenas horários terminados em :55, :00, :05, :25, :30 ou :35.";
@@ -151,24 +156,55 @@ export function validateSignalTime(time: string, dateKey?: string) {
 export function isSignalTimeInTradingWindow(time: string, dateKey?: string) {
   const minutes = timeToMinutes(time);
   const start = timeToMinutes(signalOperationStart(dateKey));
-  const end = timeToMinutes(operationEnd);
-  return minutes >= start || minutes <= end;
+  const end = timeToMinutes(signalOperationEnd(dateKey));
+  return end >= start ? minutes >= start && minutes <= end : minutes >= start || minutes <= end;
 }
 
 export function signalOperationStart(dateKey?: string) {
-  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return weekdayOperationStart;
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Sao_Paulo",
-    weekday: "long",
-  }).format(new Date(`${dateKey}T12:00:00-03:00`)).toLowerCase();
+  const weekday = weekdayForDateKey(dateKey);
   if (weekday === "saturday") return saturdayOperationStart;
   if (weekday === "sunday") return sundayOperationStart;
   return weekdayOperationStart;
 }
 
+export function signalOperationEnd(dateKey?: string) {
+  const weekday = weekdayForDateKey(dateKey);
+  return weekday === "saturday" || weekday === "sunday" ? weekendOperationEnd : weekdayOperationEnd;
+}
+
+export function isSundayHourlyWindow(dateKey: string | undefined, time: string) {
+  if (weekdayForDateKey(dateKey) !== "sunday") return false;
+  const hour = Number(time.slice(0, 2));
+  return hour >= 10 && hour <= 15;
+}
+
+export function limitAutomaticSignals<T extends { id?: string; createdAt?: string; dateKey: string; projectId: string; time: string }>(signals: T[]) {
+  const selected = new Map<string, T>();
+  for (const signal of signals) {
+    if (!isSundayHourlyWindow(signal.dateKey, signal.time)) continue;
+    const key = `${signal.projectId}:${signal.dateKey}:${signal.time.slice(0, 2)}`;
+    const current = selected.get(key);
+    const rank = `${signal.createdAt || ""}:${signal.id || ""}`;
+    const currentRank = current ? `${current.createdAt || ""}:${current.id || ""}` : "";
+    if (!current || rank < currentRank) selected.set(key, signal);
+  }
+  return signals.filter((signal) => {
+    if (!isSundayHourlyWindow(signal.dateKey, signal.time)) return true;
+    return selected.get(`${signal.projectId}:${signal.dateKey}:${signal.time.slice(0, 2)}`) === signal;
+  });
+}
+
 export function isOvernightSignalTime(time: string) {
   const minutes = timeToMinutes(time);
-  return minutes >= 0 && minutes <= timeToMinutes(operationEnd);
+  return minutes >= 0 && minutes <= timeToMinutes(weekdayOperationEnd);
+}
+
+function weekdayForDateKey(dateKey?: string) {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return "weekday";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+  }).format(new Date(`${dateKey}T12:00:00-03:00`)).toLowerCase();
 }
 
 export function operationDateKeyForRuntime(dateKey: string, time: string) {

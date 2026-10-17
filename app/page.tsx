@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Clock3, Eye, Import, ListChecks, Loader2, MessageSquareText, Moon, Power, Radio, Send, Settings, Smartphone, Sun, Sunrise, Trash2, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isSignalExpired, parseSignalInput, validateSignalTime } from "../lib/signals";
+import { isSignalExpired, limitAutomaticSignals, parseSignalInput, validateSignalTime } from "../lib/signals";
 import type { CaptureSession, DayMode, MessageKind, ProjectSettings, SavedMessage, ScheduledSignal, SendLog, TemplateKind, Weekday } from "../lib/store";
 
 type TelegramAccountView = { sendMode?: "auto" | "bot" | "user"; apiId?: string; phone?: string; targetPeer?: string; accountLabel?: string; status?: "disconnected" | "code_sent" | "password_required" | "connected" | "legacy"; apiHashConfigured?: boolean; sharedCredentialsConfigured?: boolean; sessionConfigured?: boolean; legacyFallback?: boolean };
@@ -16,7 +16,7 @@ const standardKinds = ["morning_emoji", "good_morning", "analysis_start", "good_
 const messageIcons = { morning_emoji: Sunrise, good_morning: Sun, analysis_start: Radio, good_night: Moon };
 const days: [DayMode, string][] = [["weekday", "Seg–Sex"], ["saturday", "Sábado"], ["sunday", "Domingo"]];
 const weekdays: [Weekday, string][] = [["monday", "Seg"], ["tuesday", "Ter"], ["wednesday", "Qua"], ["thursday", "Qui"], ["friday", "Sex"], ["saturday", "Sáb"], ["sunday", "Dom"]];
-const goodNightReturnTime = (day: Weekday) => day === "saturday" ? "08:00" : day === "sunday" ? "09:00" : "07:00";
+const goodNightReturnTime = (day: Weekday) => day === "sunday" ? "09:00" : "07:00";
 
 function shortProjectName(name: string) {
   return name.split("|")[0].replace(/💎/g, "").trim();
@@ -80,7 +80,8 @@ export default function Home() {
   const actionPending = useRef(false);
   const selected = projects.find((project) => project.id === projectId);
   const parsed = useMemo(() => parseSignalInput(rawText, { includeOutOfCriteria: true }), [rawText]);
-  const automatic = (signal: ScheduledSignal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time, signal.dateKey);
+  const automaticSignalIds = useMemo(() => new Set(limitAutomaticSignals(signals.filter((signal) => !signal.manualOnly && !signal.validationError && !validateSignalTime(signal.time, signal.dateKey))).map((signal) => signal.id)), [signals]);
+  const automatic = (signal: ScheduledSignal) => automaticSignalIds.has(signal.id);
   const upcoming = (signal: ScheduledSignal) => automatic(signal) && !signal.sentAt && !signal.error && !manualResults[signal.id]?.sent && !manualResults[signal.id]?.error && !isSignalExpired(signal.dateKey, signal.time, new Date(now));
   const dailySignals = useMemo(() => signals.filter((signal) => signal.projectId === projectId && signal.dateKey === dateKey).sort((a, b) => a.time.localeCompare(b.time) || a.pair.localeCompare(b.pair)), [signals, projectId, dateKey]);
   const visibleSignals = dailySignals.filter((signal) => filter === "all" || upcoming(signal));

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectConfig } from "../../../lib/projects";
-import { isSignalDueNow, validateSignalTime } from "../../../lib/signals";
+import { isSignalDueNow, limitAutomaticSignals, validateSignalTime } from "../../../lib/signals";
 import { renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
 import { standardMessagePayload } from "../../../lib/standardMessages";
@@ -94,10 +94,12 @@ async function runSchedule(request: NextRequest) {
     }
   }
 
-  const dueSignals = store.signals.filter((signal) => (
-    !signal.sentAt
-    && !signal.manualOnly
+  const automaticSignals = limitAutomaticSignals(store.signals.filter((signal) => (
+    !signal.manualOnly
     && !validateSignalTime(signal.time, signal.dateKey)
+  )));
+  const dueSignals = automaticSignals.filter((signal) => (
+    !signal.sentAt
     && isSignalDueNow(signal.dateKey, signal.time, now)
   ));
   for (const signal of dueSignals) {
