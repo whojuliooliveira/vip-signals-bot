@@ -44,7 +44,7 @@ const directionMap: Record<string, Direction> = {
 
 const allowedSignalMinutes = new Set(["00", "05", "25", "30", "35", "55"]);
 const weekdayOperationStart = "07:25";
-const saturdayOperationStart = "07:25";
+const saturdayOperationStart = "08:25";
 const sundayOperationStart = "10:00";
 const weekdayOperationEnd = "03:30";
 const weekendOperationEnd = "23:30";

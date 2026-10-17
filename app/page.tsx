@@ -16,7 +16,7 @@ const standardKinds = ["morning_emoji", "good_morning", "analysis_start", "good_
 const messageIcons = { morning_emoji: Sunrise, good_morning: Sun, analysis_start: Radio, good_night: Moon };
 const days: [DayMode, string][] = [["weekday", "Seg–Sex"], ["saturday", "Sábado"], ["sunday", "Domingo"]];
 const weekdays: [Weekday, string][] = [["monday", "Seg"], ["tuesday", "Ter"], ["wednesday", "Qua"], ["thursday", "Qui"], ["friday", "Sex"], ["saturday", "Sáb"], ["sunday", "Dom"]];
-const goodNightReturnTime = (day: Weekday) => day === "sunday" ? "09:00" : "07:00";
+const goodNightReturnTime = (day: Weekday) => day === "saturday" ? "08:00" : day === "sunday" ? "09:00" : "07:00";
 
 function shortProjectName(name: string) {
   return name.split("|")[0].replace(/💎/g, "").trim();

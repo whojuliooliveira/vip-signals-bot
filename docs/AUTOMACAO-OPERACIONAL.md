@@ -103,7 +103,7 @@ Linhas repetidas da mesma importacao sao ignoradas. Linhas que parecem sinais, m
 Um sinal entra no automatico quando atende simultaneamente a estas regras:
 
 - de segunda a sexta, horario entre `07:25` e `03:30`;
-- no sabado, horario entre `07:25` e `23:30`;
+- no sabado, horario entre `08:25` e `23:30`;
 - no domingo, horario entre `10:00` e `23:30`;
 - no domingo, de `10:00` a `15:00`, somente horarios cheios (`10:00`, `11:00`, `12:00`, `13:00`, `14:00` e `15:00`) e no maximo um sinal por canal em cada hora;
 - no domingo, a partir de `16:00`, volta a valer a grade normal de minutos permitidos;
@@ -219,23 +219,23 @@ Cada mensagem pode ser ativada/desativada e ter horario proprio. Os valores inic
 
 | Mensagem | Segunda a sexta | Sabado | Domingo |
 |---|---:|---:|---:|
-| Emoji de abertura | 06:54 | 06:54 | 08:55 |
-| Bom dia | 07:01 | 07:01 | 09:00 |
-| Inicio das analises | 07:15 | 07:15 | 09:00 |
+| Emoji de abertura | 06:54 | 07:54 | 08:55 |
+| Bom dia | 07:01 | 08:01 | 09:00 |
+| Inicio das analises | 07:15 | 08:15 | 09:30 |
 
 O primeiro sinal automatico respeita a abertura de cada dia e sai cinco minutos antes do horario da operacao:
 
 | Dia | Primeiro sinal | Envio |
 |---|---:|---:|
 | Segunda a sexta | 07:25 | 07:20 |
-| Sabado | 07:25 | 07:20 |
+| Sabado | 08:25 | 08:20 |
 | Domingo | 10:00 | 09:55 |
 
 Sinais anteriores a essas aberturas ficam manuais. No sabado e no domingo, sinais depois de `23:30` tambem ficam manuais. A faixa da madrugada ate `03:30` permanece automatica apenas de segunda a sexta.
 
 Boa noite usa configuracao individual por dia da semana. As configuracoes salvas no painel/Supabase prevalecem sobre os valores iniciais do codigo.
 
-O horario de retorno escrito dentro do modelo de boa noite e dinamico pelo dia do disparo em Brasilia: segunda a sabado informa `7 a.m UTC-3`, e domingo informa `9 a.m UTC-3`. A troca acontece no envio e preserva o restante do modelo capturado.
+O horario de retorno escrito dentro do modelo de boa noite e dinamico pelo dia do disparo em Brasilia: de segunda a sexta informa `7 a.m UTC-3`, no sabado informa `8 a.m UTC-3` e no domingo informa `9 a.m UTC-3`. Assim, a mensagem disparada as `04:01` da madrugada de sexta para sabado pertence ao sabado e informa retorno as `8 a.m UTC-3`. A troca acontece no envio e preserva o restante do modelo capturado.
 
 ### Como a agenda das mensagens funciona
 

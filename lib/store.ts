@@ -182,7 +182,7 @@ export const defaultMessages: SavedMessage[] = [
     enabled: true,
     projects: ["expert_a", "expert_b"],
     textByLanguage: { es: "☀️", en: "☀️" },
-    timeByDay: { weekday: "06:54", saturday: "06:54", sunday: "08:55" },
+    timeByDay: { weekday: "06:54", saturday: "07:54", sunday: "08:55" },
     includeInlineButton: false,
     updatedAt: new Date().toISOString(),
   },
@@ -196,7 +196,7 @@ export const defaultMessages: SavedMessage[] = [
       es: "💎 Buenos días, traders VIP! Vamos por otro día de señales.",
       en: "💎 Good morning, VIP traders! Another day of signals starts now.",
     },
-    timeByDay: { weekday: "07:01", saturday: "07:01", sunday: "09:00" },
+    timeByDay: { weekday: "07:01", saturday: "08:01", sunday: "09:00" },
     includeInlineButton: false,
     updatedAt: new Date().toISOString(),
   },
@@ -210,7 +210,7 @@ export const defaultMessages: SavedMessage[] = [
       es: "⚠️ Comenzamos la Sesión VIP ⚠️\n\n›› Haz clic aquí para abrir el Broker",
       en: "⚠️ VIP Session is starting now ⚠️\n\n›› Click here to open the Broker",
     },
-    timeByDay: { weekday: "07:15", saturday: "07:15", sunday: "09:00" },
+    timeByDay: { weekday: "07:15", saturday: "08:15", sunday: "09:30" },
     includeInlineButton: true,
     updatedAt: new Date().toISOString(),
   },
@@ -344,17 +344,19 @@ function signalFromRow(row: any): ScheduledSignal {
 }
 
 function normalizeMessages(messages: SavedMessage[]) {
-  const legacySaturdayTimes: Partial<Record<MessageKind, string>> = {
-    morning_emoji: "07:50",
-    good_morning: "08:00",
-    analysis_start: "08:15",
+  const legacyDayTimes: Partial<Record<MessageKind, Partial<Record<DayMode, string[]>>>> = {
+    morning_emoji: { saturday: ["07:50", "06:54"] },
+    good_morning: { saturday: ["08:00", "07:01"] },
+    analysis_start: { saturday: ["07:15", "08:15"], sunday: ["09:00"] },
   };
   return messages.map((message) => {
     const defaults = defaultMessages.find((item) => item.id === message.id);
     if (!defaults) return message;
     const timeByDay = { ...defaults.timeByDay, ...message.timeByDay };
-    if (legacySaturdayTimes[message.kind] === message.timeByDay?.saturday) {
-      timeByDay.saturday = defaults.timeByDay.saturday;
+    for (const day of ["weekday", "saturday", "sunday"] as DayMode[]) {
+      if (legacyDayTimes[message.kind]?.[day]?.includes(message.timeByDay?.[day] || "")) {
+        timeByDay[day] = defaults.timeByDay[day];
+      }
     }
     return {
       ...message,

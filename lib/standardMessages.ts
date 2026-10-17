@@ -24,7 +24,7 @@ export function standardMessagePayload(project: ProjectConfig, message: SavedMes
 
 export function goodNightReturnHour(now = new Date()) {
   const weekday = localWeekday(now);
-  if (weekday === "saturday") return 7;
+  if (weekday === "saturday") return 8;
   if (weekday === "sunday") return 9;
   return 7;
 }
