@@ -244,7 +244,7 @@ export const defaultProjects: ProjectSettings[] = [
     id: "expert_a",
     name: "💎 José Álvarez | Señales VIP 💎",
     language: "es",
-    link: "https://link-projeto-espanhol",
+    link: "https://quotex.com/sign-up?lid=1060640",
     brokerLabel: "Haz clic aquí",
     enabled: false,
   },
