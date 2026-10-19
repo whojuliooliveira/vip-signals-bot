@@ -111,9 +111,20 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
+  async function loadStatus() {
+    try {
+      const result = await requestJson("/api/status");
+      setWorkerLastSeen(result.workerLastSeen || null);
+    } catch {
+      // A tela mantém o último pulso conhecido; o indicador ficará offline se expirar.
+    } finally {
+      setNow(Date.now());
+    }
+  }
+
   useEffect(() => {
     loadConfig(true);
-    const timer = setInterval(() => { setNow(Date.now()); loadConfig(); }, 12000);
+    const timer = setInterval(loadStatus, 60000);
     return () => clearInterval(timer);
   }, []);
 

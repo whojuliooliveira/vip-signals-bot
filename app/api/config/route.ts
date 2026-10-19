@@ -23,7 +23,7 @@ function publicTelegramAccount(account: TelegramAccountSettings | undefined, all
 export async function GET() {
   try {
     const store = await loadStore();
-    const runtimeProjects = await getProjectsConfig();
+    const runtimeProjects = await getProjectsConfig(store);
     const projects = store.projects.map((project) => {
       const runtime = runtimeProjects.find((item) => item.id === project.id);
       return {
@@ -38,7 +38,7 @@ export async function GET() {
       };
     });
     const heartbeat = hasSupabase() ? await supabaseSelect<{ created_at: string }>("schedule_keys", "select=created_at&id=eq.worker-heartbeat") : [];
-    return NextResponse.json({ ok: true, workerLastSeen: heartbeat[0]?.created_at || null, messages: store.messages, projects, signals: store.signals, logs: store.logs.slice(0, 100), sentScheduleKeys: store.sentScheduleKeys });
+    return NextResponse.json({ ok: true, workerLastSeen: heartbeat[0]?.created_at || null, messages: store.messages, projects, signals: store.signals, logs: store.logs.slice(0, 100) });
   } catch (error) {
     return NextResponse.json({
       ok: false,

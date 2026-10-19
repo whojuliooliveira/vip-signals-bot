@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProjectConfig } from "../../../lib/projects";
+import { resolveProjectConfig } from "../../../lib/projects";
 import { isSignalDueNow, limitAutomaticSignals, validateSignalTime } from "../../../lib/signals";
 import { renderSignal } from "../../../lib/templates";
 import { sendTelegramMessage } from "../../../lib/telegram";
 import { standardMessagePayload } from "../../../lib/standardMessages";
 import { hasSupabase, supabaseUpsert } from "../../../lib/supabase";
-import { dayMode, loadStore, localDateKey, localTime, localWeekday, saveScheduleChanges, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
+import { dayMode, loadScheduleKeys, loadScheduleStore, localDateKey, localTime, localWeekday, saveScheduleChanges, scheduledKey, uid, type DayMode, type SavedMessage, type SendLog, type Weekday } from "../../../lib/store";
 
 function authorized(request: NextRequest) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -28,19 +28,23 @@ async function runSchedule(request: NextRequest) {
   const weekday = localWeekday(now);
   const time = request.nextUrl.searchParams.get("time") || localTime(now);
   const dateKey = request.nextUrl.searchParams.get("date") || localDateKey(now);
-  const store = await loadStore();
+  const store = await loadScheduleStore(now);
   const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
   const dueMessages = store.messages.filter((message) => {
     const scheduled = scheduledMessageTime(message, mode, weekday);
     const delay = scheduled ? minutes(time) - minutes(scheduled) : -1;
     return message.enabled && delay >= 0 && delay < 5;
   });
+  const candidateKeys = dueMessages.flatMap((message) => message.projects.map((projectId) => (
+    scheduledKey(dateKey, scheduledMessageTime(message, mode, weekday)!, message.id, projectId)
+  )));
+  store.sentScheduleKeys = await loadScheduleKeys(candidateKeys);
   const results = [];
 
   for (const message of dueMessages) {
     for (const projectId of message.projects) {
       if (!store.projects.find((item) => item.id === projectId)?.enabled) continue;
-      const project = await getProjectConfig(projectId);
+      const project = resolveProjectConfig(projectId, store.projects);
       if (!project) continue;
 
       const key = scheduledKey(dateKey, scheduledMessageTime(message, mode, weekday)!, message.id, project.id);
@@ -104,7 +108,7 @@ async function runSchedule(request: NextRequest) {
   ));
   for (const signal of dueSignals) {
     if (!store.projects.find((item) => item.id === signal.projectId)?.enabled) continue;
-    const project = await getProjectConfig(signal.projectId);
+    const project = resolveProjectConfig(signal.projectId, store.projects);
     if (!project) continue;
 
     try {

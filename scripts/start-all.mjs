@@ -5,10 +5,10 @@ loadEnvFile(".env");
 loadEnvFile(".env.local");
 
 const port = process.env.PORT || "3000";
-const appUrl = (process.env.PUBLIC_APP_URL || process.env.APP_URL || `http://127.0.0.1:${port}`).replace(/\/$/, "");
+const appUrl = (process.env.SCHEDULER_APP_URL || `http://127.0.0.1:${port}`).replace(/\/$/, "");
 
 process.env.PORT = port;
-process.env.PUBLIC_APP_URL = appUrl;
+process.env.SCHEDULER_APP_URL = appUrl;
 
 function start(name, command, args, options = {}) {
   const child = spawn(command, args, {

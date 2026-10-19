@@ -4,7 +4,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
 }).outputText, filename);
-const { dayMode, localWeekday, localDateKey, defaultMessages } = require("../lib/store.ts");
+const { dayMode, localWeekday, localDateKey, defaultMessages, scheduleSignalSlots } = require("../lib/store.ts");
 const { goodNightReturnHour, standardMessagePayload } = require("../lib/standardMessages.ts");
 const { directionText, renderSavedSignalTemplate, renderSignal } = require("../lib/templates.ts");
 const { limitAutomaticSignals, signalOperationEnd, signalOperationStart, validateSignalTime } = require("../lib/signals.ts");
@@ -12,6 +12,10 @@ assert.equal(dayMode(new Date("2026-10-11T02:30:00Z")), "saturday");
 assert.equal(dayMode(new Date("2026-10-11T03:00:00Z")), "sunday");
 assert.equal(localWeekday(new Date("2026-10-12T02:30:00Z")), "sunday");
 assert.equal(localDateKey(new Date("2026-10-12T02:30:00Z")), "2026-10-11");
+assert.deepEqual(scheduleSignalSlots(new Date("2026-10-18T02:58:30Z"), 5), [
+  { dateKey: "2026-10-17", times: ["23:58", "23:59"] },
+  { dateKey: "2026-10-18", times: ["00:00", "00:01", "00:02", "00:03"] },
+]);
 assert.equal(directionText("es", "UP"), "ARRIBA");
 assert.equal(directionText("es", "DOWN"), "ABAJO");
 assert.equal(defaultMessages.find((message) => message.kind === "morning_emoji").timeByDay.saturday, "07:54");

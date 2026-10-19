@@ -10,7 +10,7 @@ A automacao depende de quatro servicos remotos:
 
 1. **Vercel**: hospeda o painel e executa as APIs.
 2. **Supabase**: guarda canais, listas, sinais, modelos, configuracoes e historico.
-3. **EasyPanel**: mantem o worker ativo e chama a agenda a cada 20 segundos.
+3. **EasyPanel**: mantem o painel e o worker ativos; o worker chama a agenda internamente a cada 60 segundos.
 4. **Telegram**: recebe os envios pelo Bot API ou pela conta Telegram conectada.
 
 O computador so volta a ser necessario para manutencao ou alteracao de codigo. A troca da conta Telegram passa a ser feita no proprio painel.
@@ -30,7 +30,7 @@ Painel e APIs na Vercel
         +---- Telegram (envios)
         ^
         |
-Worker no EasyPanel, a cada 20 segundos
+Worker no EasyPanel, a cada 60 segundos
 ```
 
 ### Painel e APIs
@@ -62,7 +62,7 @@ O container `vip-signals-bot` no EasyPanel inicia:
 - uma instancia interna do Next.js;
 - o processo `scripts/schedule-worker.mjs`.
 
-O worker chama a API publica da Vercel em `/api/run-schedule` a cada `WORKER_INTERVAL_MS`. O valor operacional atual e 20.000 ms, ou 20 segundos.
+O worker chama a API local do proprio container em `/api/run-schedule` a cada `WORKER_INTERVAL_MS`. O valor operacional atual e 60.000 ms, ou 60 segundos. Isso evita consumo continuo de funcoes na Vercel.
 
 A chamada usa `CRON_SECRET`. O mesmo segredo precisa existir no EasyPanel e na Vercel.
 
@@ -168,7 +168,7 @@ Exemplo para um sinal das `14:30`:
 
 - inicio da janela: `14:25:00`;
 - fim da janela: aproximadamente `14:30:00`;
-- o worker verifica a cada 20 segundos;
+- o worker verifica a cada 60 segundos;
 - no primeiro ciclo dentro da janela, o sinal e enviado;
 - depois do fim da janela, ele fica **Expirado** e nao existe envio atrasado automatico.
 
@@ -359,7 +359,7 @@ Para operar sem o computador:
 - projeto da Vercel implantado e acessivel;
 - Supabase ativo;
 - servico `vip-signals-bot` verde no EasyPanel;
-- `PUBLIC_APP_URL` apontando para a URL oficial;
+- `SCHEDULER_APP_URL` apontando para `http://127.0.0.1:3000`;
 - `CRON_SECRET` igual no EasyPanel e na Vercel;
 - conta Telegram conectada no painel, quando o modelo usa emoji personalizado;
 - bot/conta com permissao de publicar no canal;
@@ -387,9 +387,9 @@ Nunca coloque os valores reais em documentacao, commit, print ou mensagem public
 
 O worker precisa, no minimo, de:
 
-- `PUBLIC_APP_URL=https://vip-signals-bot-bice.vercel.app`
+- `SCHEDULER_APP_URL=http://127.0.0.1:3000`
 - `CRON_SECRET` igual ao da Vercel
-- `WORKER_INTERVAL_MS=20000`
+- `WORKER_INTERVAL_MS=60000`
 
 O container atual recebe outras variaveis porque tambem inicia uma instancia interna do painel.
 
@@ -486,4 +486,4 @@ O endpoint da agenda continua protegido por `CRON_SECRET`, e os segredos nao sao
 
 ## Resumo final
 
-O fluxo automatico nao depende do computador. A lista fica no Supabase, o EasyPanel acorda a agenda a cada 20 segundos, a Vercel decide o que esta no horario e envia ao Telegram. O ponto de maior importancia operacional e manter o worker do EasyPanel verde e conferir o indicador de heartbeat no painel.
+O fluxo automatico nao depende do computador. A lista fica no Supabase e o EasyPanel executa localmente a agenda a cada 60 segundos, decide o que esta no horario e envia ao Telegram. A Vercel serve o painel, mas nao participa mais dos ciclos automaticos. O ponto de maior importancia operacional e manter o servico do EasyPanel verde e conferir o indicador de heartbeat no painel.

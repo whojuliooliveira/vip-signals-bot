@@ -280,6 +280,53 @@ export async function loadStore(): Promise<AppStore> {
   }
 }
 
+export function scheduleSignalSlots(now = new Date(), minutesAhead = 5) {
+  const slots = new Map<string, Set<string>>();
+  for (let offset = 0; offset <= minutesAhead; offset += 1) {
+    const instant = new Date(now.getTime() + offset * 60_000);
+    const dateKey = localDateKey(instant);
+    const times = slots.get(dateKey) || new Set<string>();
+    times.add(localTime(instant));
+    slots.set(dateKey, times);
+  }
+  return [...slots.entries()].map(([dateKey, times]) => ({ dateKey, times: [...times] }));
+}
+
+export async function loadScheduleStore(now = new Date()): Promise<AppStore> {
+  if (!hasSupabase()) return loadStore();
+
+  const slotFilters = scheduleSignalSlots(now).map(({ dateKey, times }) => (
+    `and(date_key.eq.${dateKey},signal_time.in.(${times.join(",")}))`
+  ));
+  const signalQuery = `select=id,date_key,project_id,pair,market,direction,signal_time,expiry_minutes,reentries,source_text,created_at,sent_at,message_id,error&or=${encodeURIComponent(`(${slotFilters.join(",")})`)}`;
+  const [projectRows, messageRows, signalRows] = await Promise.all([
+    supabaseSelect<any>("projects", "select=*"),
+    supabaseSelect<any>("auto_messages", "select=payload"),
+    supabaseSelect<any>("signals", signalQuery),
+  ]);
+
+  return {
+    messages: messageRows.length ? normalizeMessages(messageRows.map((row) => row.payload)) : defaultMessages,
+    projects: mergeProjects(projectRows.map(projectFromRow)),
+    signals: signalRows.map(signalFromRow),
+    logs: [],
+    sentScheduleKeys: [],
+    captureSessions: [],
+  };
+}
+
+export async function loadScheduleKeys(ids: string[]) {
+  if (!ids.length) return [];
+  if (!hasSupabase()) {
+    const store = await loadStore();
+    const wanted = new Set(ids);
+    return store.sentScheduleKeys.filter((id) => wanted.has(id));
+  }
+  const values = ids.map((id) => `"${id.replace(/"/g, "")}"`).join(",");
+  const rows = await supabaseSelect<{ id: string }>("schedule_keys", `select=id&id=in.(${values})`);
+  return rows.map((row) => row.id);
+}
+
 export async function loadSignalList(projectId: string, dateKey: string, loadedStore?: AppStore) {
   if (!hasSupabase()) {
     const store = loadedStore || await loadStore();
@@ -304,23 +351,27 @@ async function loadSupabaseStore(): Promise<AppStore> {
 
   return {
     messages: messageRows.length ? normalizeMessages(messageRows.map((row) => row.payload)) : defaultMessages,
-    projects: mergeProjects(projectRows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      language: row.language,
-      botToken: row.bot_token,
-      chatId: row.chat_id,
-      link: row.link,
-      brokerLabel: row.broker_label,
-      signalTemplates: row.signal_templates || undefined,
-      messageTemplates: row.message_templates || undefined,
-      telegramAccount: row.telegram_account || undefined,
-      enabled: row.enabled,
-    }))),
+    projects: mergeProjects(projectRows.map(projectFromRow)),
     signals: signalRows.map(signalFromRow),
     logs: logRows.map((row) => row.payload),
     sentScheduleKeys: keyRows.filter((row) => row.id !== "worker-heartbeat").map((row) => row.id),
     captureSessions: captureRows.map((row) => row.payload),
+  };
+}
+
+function projectFromRow(row: any): ProjectSettings {
+  return {
+    id: row.id,
+    name: row.name,
+    language: row.language,
+    botToken: row.bot_token,
+    chatId: row.chat_id,
+    link: row.link,
+    brokerLabel: row.broker_label,
+    signalTemplates: row.signal_templates || undefined,
+    messageTemplates: row.message_templates || undefined,
+    telegramAccount: row.telegram_account || undefined,
+    enabled: row.enabled,
   };
 }
 

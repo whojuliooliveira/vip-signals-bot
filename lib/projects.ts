@@ -1,5 +1,5 @@
 import type { Locale } from "./templates";
-import { loadStore, type CapturedTemplate, type MessageKind, type TelegramAccountSettings } from "./store";
+import { loadStore, type AppStore, type CapturedTemplate, type MessageKind, type ProjectSettings, type TelegramAccountSettings } from "./store";
 
 export type ProjectConfig = {
   id: string;
@@ -41,47 +41,45 @@ export function getProject(id: string): ProjectConfig | undefined {
   return getProjects().find((item) => item.id === id);
 }
 
-export async function getProjectsConfig(): Promise<ProjectConfig[]> {
+export function resolveProjectConfig(id: string, savedProjects: ProjectSettings[]): ProjectConfig | undefined {
   const envProjects = getProjects();
-  const store = await loadStore();
-  return envProjects.map((envProject) => {
-    const saved = store.projects.find((item) => item.id === envProject.id);
-    const telegramAccount = saved?.telegramAccount || (envProject.id === "expert_b" ? undefined : { sendMode: "auto" as const });
-    return {
-      ...envProject,
-      name: saved?.name || envProject.name,
-      language: saved?.language || envProject.language,
-      botToken: saved?.botToken || envProject.botToken,
-      chatId: saved?.chatId || envProject.chatId,
-      link: saved?.link || envProject.link,
-      brokerLabel: saved?.brokerLabel || envProject.brokerLabel,
-      signalTemplates: saved?.signalTemplates,
-      messageTemplates: saved?.messageTemplates,
-      telegramAccount: envProject.language === "es"
-        ? { ...telegramAccount, sendMode: "user" }
-        : telegramAccount,
-    };
-  });
+  const envProject = envProjects.find((item) => item.id === id);
+  const saved = savedProjects.find((item) => item.id === id);
+  if (!envProject && !saved) return undefined;
+  const base = envProject || {
+    id: saved!.id,
+    name: saved!.name,
+    language: saved!.language,
+    botToken: "",
+    chatId: "",
+    link: saved!.link,
+    brokerLabel: saved!.brokerLabel,
+  };
+  const telegramAccount = saved?.telegramAccount || (base.id === "expert_b" ? undefined : { sendMode: "auto" as const });
+  return {
+    ...base,
+    name: saved?.name || base.name,
+    language: saved?.language || base.language,
+    botToken: saved?.botToken || base.botToken,
+    chatId: saved?.chatId || base.chatId,
+    link: saved?.link || base.link,
+    brokerLabel: saved?.brokerLabel || base.brokerLabel,
+    signalTemplates: saved?.signalTemplates,
+    messageTemplates: saved?.messageTemplates,
+    telegramAccount: (saved?.language || base.language) === "es"
+      ? { ...telegramAccount, sendMode: "user" }
+      : telegramAccount,
+  };
+}
+
+export async function getProjectsConfig(loadedStore?: AppStore): Promise<ProjectConfig[]> {
+  const store = loadedStore || await loadStore();
+  return getProjects()
+    .map((envProject) => resolveProjectConfig(envProject.id, store.projects))
+    .filter((item): item is ProjectConfig => Boolean(item));
 }
 
 export async function getProjectConfig(id: string): Promise<ProjectConfig | undefined> {
-  const fromConfig = (await getProjectsConfig()).find((item) => item.id === id);
-  if (fromConfig) return fromConfig;
   const store = await loadStore();
-  const saved = store.projects.find((item) => item.id === id);
-  if (!saved) return undefined;
-  return {
-    id: saved.id,
-    name: saved.name,
-    language: saved.language,
-    botToken: saved.botToken || "",
-    chatId: saved.chatId || "",
-    link: saved.link,
-    brokerLabel: saved.brokerLabel,
-    signalTemplates: saved.signalTemplates,
-    messageTemplates: saved.messageTemplates,
-    telegramAccount: saved.language === "es"
-      ? { ...saved.telegramAccount, sendMode: "user" }
-      : saved.telegramAccount,
-  };
+  return resolveProjectConfig(id, store.projects);
 }
