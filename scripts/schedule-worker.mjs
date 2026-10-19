@@ -1,4 +1,5 @@
-const intervalMs = Number(process.env.WORKER_INTERVAL_MS || 60_000);
+const configuredIntervalMs = Number(process.env.WORKER_INTERVAL_MS || 60_000);
+const intervalMs = Math.max(60_000, Number.isFinite(configuredIntervalMs) ? configuredIntervalMs : 60_000);
 const appUrl = (process.env.SCHEDULER_APP_URL || process.env.PUBLIC_APP_URL || process.env.APP_URL || "").replace(/\/$/, "");
 const secret = process.env.CRON_SECRET || process.env.ADMIN_PASSWORD || "";
 

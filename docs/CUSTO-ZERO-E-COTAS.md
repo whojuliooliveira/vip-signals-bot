@@ -46,11 +46,10 @@ Worker de sinais ligado: http://127.0.0.1:3000 a cada 60s
 As variaveis recomendadas sao:
 
 ```text
-SCHEDULER_APP_URL=http://127.0.0.1:3000
 WORKER_INTERVAL_MS=60000
 ```
 
-`PUBLIC_APP_URL` pode continuar existindo para referencia externa, mas nao controla mais o destino do worker quando `SCHEDULER_APP_URL` esta definido.
+`SCHEDULER_APP_URL` deve ficar ausente no servico combinado para que o processo use automaticamente `http://127.0.0.1:$PORT`. `PUBLIC_APP_URL` pode continuar existindo para referencia externa, mas nao controla o destino do worker. Valores antigos de `WORKER_INTERVAL_MS` abaixo de 60 segundos sao elevados automaticamente para 60 segundos.
 
 ## Limites relevantes
 

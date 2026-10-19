@@ -19,9 +19,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
-ENV SCHEDULER_APP_URL=http://127.0.0.1:3000
-ENV WORKER_INTERVAL_MS=60000
-
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/.next ./.next
