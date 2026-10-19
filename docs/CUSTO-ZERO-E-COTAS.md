@@ -66,6 +66,14 @@ Referencias oficiais:
 
 ## Acompanhamento
 
+Linha de base registrada em 19/10/2026:
+
+- egress total da organizacao: aproximadamente 17,364 GB;
+- projeto `[DMS] BOT OFICIAL`: aproximadamente 17,345 GB;
+- projeto `DigiMS App`: aproximadamente 0,182 GB;
+- Storage do DMS Operacao: aproximadamente 503 MB;
+- banco do projeto principal: aproximadamente 44 MB.
+
 1. Confirmar heartbeat no painel apos o redeploy do EasyPanel.
 2. Conferir na Vercel que o projeto `vip-signals-bot` parou de receber invocacoes periodicas.
 3. Conferir no Supabase a curva de Database Egress nas 24 a 48 horas seguintes.
