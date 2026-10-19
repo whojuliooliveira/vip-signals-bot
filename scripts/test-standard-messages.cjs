@@ -6,7 +6,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileMo
 }).outputText, filename);
 const { dayMode, localWeekday, localDateKey, defaultMessages, scheduleSignalSlots } = require("../lib/store.ts");
 const { goodNightReturnHour, standardMessagePayload } = require("../lib/standardMessages.ts");
-const { directionText, renderSavedSignalTemplate, renderSignal } = require("../lib/templates.ts");
+const { directionText, renderSavedSignalTemplate, renderSignal, withCurrentBrokerLink } = require("../lib/templates.ts");
 const { limitAutomaticSignals, signalOperationEnd, signalOperationStart, validateSignalTime } = require("../lib/signals.ts");
 assert.equal(dayMode(new Date("2026-10-11T02:30:00Z")), "saturday");
 assert.equal(dayMode(new Date("2026-10-11T03:00:00Z")), "sunday");
@@ -52,6 +52,18 @@ assert.match(renderSignal({ locale: "es", title: "Test", pair: "AUD/CAD", market
 assert.match(renderSignal({ locale: "es", title: "Test", pair: "AUD/CAD", market: "OTC", direction: "DOWN", time: "14:30", expiryMinutes: 5, reentries: 2, brokerLink: "https://example.com", brokerLabel: "Abrir", includeInlineButton: true }).text, /ABAJO/);
 const legacySpanish = renderSavedSignalTemplate({ id: "legacy", kind: "signal_up", html: "", text: "{{pair}} ({{market}}) · {{direction}} · HH:MM", entities: [], capturedAt: new Date().toISOString() }, { locale: "es", title: "Test", pair: "USD/ARS", market: "OTC", direction: "UP", time: "16:30", expiryMinutes: 5, reentries: 2, brokerLink: "https://example.com", brokerLabel: "Abrir", includeInlineButton: true });
 assert.equal(legacySpanish.text, "USD/ARS (OTC) · ARRIBA · 16:30");
+const staleBrokerTemplate = withCurrentBrokerLink({
+  id: "stale-link",
+  kind: "signal_up",
+  html: '<a href="https://quotex.com/sign-up/?lid=1060640">Abrir</a>',
+  text: "Abrir",
+  entities: [{ type: "text_link", offset: 0, length: 5, url: "https://quotex.com/sign-up/?lid=1060640" }],
+  buttons: [[{ text: "Abrir", url: "https://broker-qx.pro/sign-up/?lid=608668" }]],
+  capturedAt: new Date().toISOString(),
+}, "https://quotex.com/sign-up?lid=1060640");
+assert.match(staleBrokerTemplate.html, /sign-up\?lid=1060640/);
+assert.equal(staleBrokerTemplate.entities[0].url, "https://quotex.com/sign-up?lid=1060640");
+assert.equal(staleBrokerTemplate.buttons[0][0].url, "https://quotex.com/sign-up?lid=1060640");
 assert.equal(goodNightReturnHour(new Date("2026-10-17T07:01:00Z")), 8);
 assert.equal(goodNightReturnHour(new Date("2026-10-18T03:02:00Z")), 9);
 assert.equal(goodNightReturnHour(new Date("2026-10-19T03:01:00Z")), 7);

@@ -1,4 +1,4 @@
-import type { Locale } from "./templates";
+import { withCurrentBrokerLink, type Locale } from "./templates";
 import { loadStore, type AppStore, type CapturedTemplate, type MessageKind, type ProjectSettings, type TelegramAccountSettings } from "./store";
 
 export type ProjectConfig = {
@@ -56,17 +56,25 @@ export function resolveProjectConfig(id: string, savedProjects: ProjectSettings[
     brokerLabel: saved!.brokerLabel,
   };
   const telegramAccount = saved?.telegramAccount || (base.id === "expert_b" ? undefined : { sendMode: "auto" as const });
+  const language = saved?.language || base.language;
+  const link = saved?.link || base.link;
+  const signalTemplates = saved?.signalTemplates
+    ? {
+        UP: withCurrentBrokerLink(saved.signalTemplates.UP, link),
+        DOWN: withCurrentBrokerLink(saved.signalTemplates.DOWN, link),
+      }
+    : undefined;
   return {
     ...base,
     name: saved?.name || base.name,
-    language: saved?.language || base.language,
+    language,
     botToken: saved?.botToken || base.botToken,
     chatId: saved?.chatId || base.chatId,
-    link: saved?.link || base.link,
+    link,
     brokerLabel: saved?.brokerLabel || base.brokerLabel,
-    signalTemplates: saved?.signalTemplates,
+    signalTemplates,
     messageTemplates: saved?.messageTemplates,
-    telegramAccount: (saved?.language || base.language) === "es"
+    telegramAccount: language === "es"
       ? { ...telegramAccount, sendMode: "user" }
       : telegramAccount,
   };

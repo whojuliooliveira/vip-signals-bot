@@ -24,6 +24,25 @@ export type RenderedTelegramMessage = {
   entities?: TelegramEntity[];
 };
 
+const BROKER_REGISTRATION_LINK = /https?:\/\/(?:www\.)?(?:quotex\.com|broker-qx\.pro)\/sign-up\/?\?[^\s\"'<>]*/gi;
+
+export function withCurrentBrokerLink(template: CapturedTemplate | undefined, brokerLink: string): CapturedTemplate | undefined {
+  if (!template || !brokerLink) return template;
+  const replaceLink = (value: string) => value.replace(BROKER_REGISTRATION_LINK, brokerLink);
+  return {
+    ...template,
+    html: replaceLink(template.html),
+    text: template.text === undefined ? undefined : replaceLink(template.text),
+    entities: template.entities?.map((entity) => entity.type === "text_link" && entity.url
+      ? { ...entity, url: replaceLink(entity.url) }
+      : { ...entity }),
+    buttons: template.buttons?.map((row) => row.map((button) => ({
+      ...button,
+      url: replaceLink(button.url),
+    }))),
+  };
+}
+
 export function directionLabel(locale: Locale, direction: Direction) {
   if (locale === "es") return direction === "UP" ? "ARRIBA 🟢" : "ABAJO 🔴";
   return direction === "UP" ? "BUY 🟢" : "SELL 🔴";
