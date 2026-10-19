@@ -28,6 +28,7 @@ assert.equal(signalOperationStart("2026-10-18"), "10:00");
 assert.equal(signalOperationEnd("2026-10-16"), "03:30");
 assert.equal(signalOperationEnd("2026-10-17"), "23:30");
 assert.equal(signalOperationEnd("2026-10-18"), "23:30");
+assert.equal(signalOperationEnd("2026-10-19"), "23:59");
 assert.equal(validateSignalTime("07:25", "2026-10-16"), "");
 assert.match(validateSignalTime("08:00", "2026-10-17"), /08:25/);
 assert.equal(validateSignalTime("08:25", "2026-10-17"), "");
@@ -41,6 +42,9 @@ assert.match(validateSignalTime("15:25", "2026-10-18"), /um sinal por hora/);
 assert.equal(validateSignalTime("16:05", "2026-10-18"), "");
 assert.equal(validateSignalTime("23:30", "2026-10-18"), "");
 assert.match(validateSignalTime("00:00", "2026-10-18"), /10:00/);
+assert.match(validateSignalTime("00:30", "2026-10-19"), /07:25/);
+assert.equal(validateSignalTime("07:25", "2026-10-19"), "");
+assert.equal(validateSignalTime("00:30", "2026-10-20"), "");
 const sundaySignals = [
   { id: "first", createdAt: "2026-10-17T20:00:00.000Z", projectId: "es", dateKey: "2026-10-18", time: "10:00" },
   { id: "duplicate", createdAt: "2026-10-17T20:01:00.000Z", projectId: "es", dateKey: "2026-10-18", time: "10:00" },
@@ -72,6 +76,23 @@ const spanishGoodNightProject = { id: "es", chatId: "-100456", name: "Jose", lan
 assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-17T07:01:00Z")).text, /8 a\.m UTC-3/);
 assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-18T03:02:00Z")).text, /9 a\.m UTC-3/);
 assert.match(standardMessagePayload(spanishGoodNightProject, goodNight, new Date("2026-10-19T03:01:00Z")).text, /7 a\.m UTC-3/);
+const legacyEnglishProject = {
+  id: "expert_b",
+  chatId: "-100123",
+  name: "Tom",
+  language: "en",
+  link: "https://example.com/signup",
+  brokerLabel: "Click here",
+  messageTemplates: {
+    morning_emoji: { html: '<tg-emoji emoji-id="123">☀️</tg-emoji>' },
+    analysis_start: { html: '<tg-emoji emoji-id="456">⚠️</tg-emoji> <a href="{{brokerLink}}">Click here</a>' },
+  },
+};
+const legacyEmojiPayload = standardMessagePayload(legacyEnglishProject, defaultMessages.find((message) => message.kind === "morning_emoji"));
+const legacyAnalysisPayload = standardMessagePayload(legacyEnglishProject, defaultMessages.find((message) => message.kind === "analysis_start"));
+assert.equal(legacyEmojiPayload.text, '<tg-emoji emoji-id="123">☀️</tg-emoji>');
+assert.equal(legacyEmojiPayload.entities, undefined);
+assert.match(legacyAnalysisPayload.text, /href="https:\/\/example\.com\/signup"/);
 const project = { id: "test", chatId: "-100123", name: "Test", language: "en", link: "https://example.com", brokerLabel: "Link", messageTemplates: {} };
 for (const message of defaultMessages) {
   const template = { text: "Good morning!", entities: [{ type: "bold", offset: 0, length: 4 }], buttons: [[{ text: "Original", url: "https://example.org" }]] };

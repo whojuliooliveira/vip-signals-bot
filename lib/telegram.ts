@@ -19,7 +19,10 @@ export async function sendTelegramMessage(token: string, payload: SendTelegramMe
   const sendMode = (account?.sendMode || process.env.TELEGRAM_SEND_MODE || "auto").toLowerCase();
 
   // Bots can silently discard channel custom emojis while returning success.
-  if (sendMode === "auto" && payload.entities?.some((entity) => entity.type === "custom_emoji")) {
+  if (sendMode === "auto" && (
+    payload.entities?.some((entity) => entity.type === "custom_emoji")
+    || /<tg-emoji\b/i.test(payload.text)
+  )) {
     return sendTelegramUserMessage(payload, account);
   }
 

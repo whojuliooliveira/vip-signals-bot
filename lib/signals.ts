@@ -47,6 +47,7 @@ const weekdayOperationStart = "07:25";
 const saturdayOperationStart = "08:25";
 const sundayOperationStart = "10:00";
 const weekdayOperationEnd = "03:30";
+const mondayOperationEnd = "23:59";
 const weekendOperationEnd = "23:30";
 const signalLeadMinutes = 5;
 const signalGraceMinutes = 5;
@@ -169,6 +170,7 @@ export function signalOperationStart(dateKey?: string) {
 
 export function signalOperationEnd(dateKey?: string) {
   const weekday = weekdayForDateKey(dateKey);
+  if (weekday === "monday") return mondayOperationEnd;
   return weekday === "saturday" || weekday === "sunday" ? weekendOperationEnd : weekdayOperationEnd;
 }
 

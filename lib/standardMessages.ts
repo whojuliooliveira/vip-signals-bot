@@ -6,20 +6,28 @@ import { escapeHtml } from "./templates";
 export function standardMessagePayload(project: ProjectConfig, message: SavedMessage, now = new Date()): SendTelegramMessage {
   const template = project.messageTemplates?.[message.kind];
   const body = message.textByLanguage[project.language] || message.textByLanguage.en || message.textByLanguage.es || "";
-  if (template && template.text === undefined) {
-    throw new Error("Este modelo precisa ser atualizado pela captura original antes do envio.");
-  }
-  const sourceText = template ? template.text! : escapeHtml(body);
+  const hasNativeTemplate = template?.text !== undefined;
+  const sourceText = hasNativeTemplate
+    ? template.text!
+    : template
+      ? renderLegacyTemplateHtml(template.html, project)
+      : escapeHtml(body);
   return {
     chatId: project.chatId,
     chatTitle: project.name,
     text: message.kind === "good_night" ? applyGoodNightReturnHour(sourceText, now) : sourceText,
-    entities: template?.entities,
+    entities: hasNativeTemplate ? template.entities : undefined,
     media: template?.media,
     buttons: template?.buttons,
     buttonText: !template && message.includeInlineButton ? project.brokerLabel : undefined,
     buttonUrl: !template && message.includeInlineButton ? project.link : undefined,
   };
+}
+
+function renderLegacyTemplateHtml(html: string, project: ProjectConfig) {
+  return html
+    .replace(/\{\{brokerLink\}\}/g, escapeHtml(project.link))
+    .replace(/\{\{brokerLabel\}\}/g, escapeHtml(project.brokerLabel));
 }
 
 export function goodNightReturnHour(now = new Date()) {
