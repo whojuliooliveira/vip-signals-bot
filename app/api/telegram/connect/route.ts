@@ -36,14 +36,16 @@ export async function POST(request: NextRequest) {
     if (!project) throw new Error("Canal não encontrado.");
 
     if (action === "disconnect") {
-      project.telegramAccount = {
-        sendMode: project.telegramAccount?.sendMode || "auto",
-        apiId: project.telegramAccount?.apiId,
-        apiHash: project.telegramAccount?.apiHash,
-        phone: project.telegramAccount?.phone,
-        targetPeer: project.telegramAccount?.targetPeer,
-        status: "disconnected",
-      };
+      for (const item of store.projects) {
+        item.telegramAccount = {
+          sendMode: item.telegramAccount?.sendMode || (item.language === "es" ? "user" : "auto"),
+          apiId: project.telegramAccount?.apiId || item.telegramAccount?.apiId,
+          apiHash: project.telegramAccount?.apiHash || item.telegramAccount?.apiHash,
+          phone: project.telegramAccount?.phone || item.telegramAccount?.phone,
+          targetPeer: item.telegramAccount?.targetPeer,
+          status: "disconnected",
+        };
+      }
       await saveStore(store);
       return NextResponse.json({ ok: true, status: "disconnected" });
     }
@@ -99,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     if (!(await client.isUserAuthorized())) throw new Error("O Telegram não autorizou esta sessão.");
     const me = await client.getMe();
-    project.telegramAccount = {
+    const connectedAccount: TelegramAccountSettings = {
       ...account,
       stringSession: created.session.save() as unknown as string,
       pendingSession: undefined,
@@ -109,8 +111,16 @@ export async function POST(request: NextRequest) {
       accountLabel: accountLabel(me),
       connectedAt: new Date().toISOString(),
     };
+    for (const item of store.projects) {
+      item.telegramAccount = {
+        ...item.telegramAccount,
+        ...connectedAccount,
+        sendMode: item.language === "es" ? "user" : item.telegramAccount?.sendMode || "auto",
+        targetPeer: item.telegramAccount?.targetPeer,
+      };
+    }
     await saveStore(store);
-    return NextResponse.json({ ok: true, status: "connected", accountLabel: project.telegramAccount.accountLabel });
+    return NextResponse.json({ ok: true, status: "connected", accountLabel: connectedAccount.accountLabel });
   } catch (error) {
     return NextResponse.json({ ok: false, error: errorMessage(error) }, { status: 400 });
   } finally {
