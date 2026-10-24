@@ -5,7 +5,10 @@ loadEnvFile(".env");
 loadEnvFile(".env.local");
 
 const port = process.env.PORT || "3000";
-const appUrl = (process.env.SCHEDULER_APP_URL || `http://127.0.0.1:${port}`).replace(/\/$/, "");
+// Keep scheduling and MTProto sends inside this container. Calling the public
+// Vercel URL can execute from a second IP and permanently invalidate the shared
+// Telegram auth key with AUTH_KEY_DUPLICATED.
+const appUrl = `http://127.0.0.1:${port}`;
 
 process.env.PORT = port;
 process.env.SCHEDULER_APP_URL = appUrl;

@@ -36,6 +36,13 @@ export function canUseTelegramUserSender(payload: SendTelegramMessage, account?:
 }
 
 export async function sendTelegramUserMessage(payload: SendTelegramMessage, account?: TelegramAccountSettings) {
+  // A Telegram MTProto auth key must never be used from more than one public IP.
+  // Vercel only serves the UI/proxies APIs; the operational EasyPanel instance is
+  // the single owner of account sessions.
+  if (process.env.VERCEL) {
+    throw new Error("Envio pela conta Telegram bloqueado fora do servidor operacional.");
+  }
+
   if (!canUseTelegramUserSender(payload, account)) {
     throw new Error("Sender Telegram por conta nao configurado ou payload incompativel.");
   }

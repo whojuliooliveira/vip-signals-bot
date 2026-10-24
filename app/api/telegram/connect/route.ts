@@ -28,6 +28,10 @@ async function clientFor(account: TelegramAccountSettings) {
 export async function POST(request: NextRequest) {
   let client: TelegramClient | undefined;
   try {
+    if (process.env.VERCEL) {
+      throw new Error("Conexão Telegram permitida somente no servidor operacional.");
+    }
+
     const body = await request.json();
     const projectId = String(body.projectId || "");
     const action = String(body.action || "");
