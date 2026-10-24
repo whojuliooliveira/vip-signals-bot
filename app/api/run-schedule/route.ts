@@ -98,9 +98,10 @@ async function runSchedule(request: NextRequest) {
     }
   }
 
+  // Re-evaluate eligibility from the current rules. Stored manualOnly values may
+  // have been produced by an older schedule and must not freeze existing lists.
   const automaticSignals = limitAutomaticSignals(store.signals.filter((signal) => (
-    !signal.manualOnly
-    && !validateSignalTime(signal.time, signal.dateKey)
+    !validateSignalTime(signal.time, signal.dateKey)
   )));
   const dueSignals = automaticSignals.filter((signal) => (
     !signal.sentAt
