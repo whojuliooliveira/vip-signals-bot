@@ -143,6 +143,9 @@ export function validateSignalTime(time: string, dateKey?: string) {
   const operationStart = signalOperationStart(dateKey);
   const operationEnd = signalOperationEnd(dateKey);
   if (!isSignalTimeInTradingWindow(time, dateKey)) {
+    if (weekdayForDateKey(dateKey) === "saturday") {
+      return "Horário fora da operação. No sábado, use sinais entre 00:00 e 03:30 ou entre 08:25 e 23:30 UTC-3.";
+    }
     return `Horário fora da operação. Use sinais entre ${operationStart} e ${operationEnd} UTC-3.`;
   }
   if (isSundayHourlyWindow(dateKey, time) && minute !== "00") {
@@ -158,6 +161,10 @@ export function isSignalTimeInTradingWindow(time: string, dateKey?: string) {
   const minutes = timeToMinutes(time);
   const start = timeToMinutes(signalOperationStart(dateKey));
   const end = timeToMinutes(signalOperationEnd(dateKey));
+  if (weekdayForDateKey(dateKey) === "saturday") {
+    const overnightEnd = timeToMinutes(weekdayOperationEnd);
+    return minutes <= overnightEnd || (minutes >= start && minutes <= end);
+  }
   return end >= start ? minutes >= start && minutes <= end : minutes >= start || minutes <= end;
 }
 
