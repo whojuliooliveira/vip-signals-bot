@@ -220,7 +220,7 @@ export default function Home() {
       if (result.requiresConfirmation) { setReplaceWarning(result.error || "Já existe uma lista para esta data."); return; }
       if (!result.ok) throw new Error(result.error || "Erro ao importar");
       setRawText(""); setReplaceWarning(""); dialogRef.current?.close(); importButtonRef.current?.focus();
-      setNotice({ text: `${result.createdCount ?? result.created?.length ?? 0} sinais salvos.${result.expired ? ` ${result.expired} já estavam expirados e ficaram disponíveis apenas para envio manual.` : ""}` });
+      setNotice({ text: `Lista salva com ${result.totalCount ?? result.createdCount ?? result.created?.length ?? 0} sinais.${result.gananciaSynced ? " Ganancia App atualizado." : ""}${result.expired ? ` ${result.expired} já estavam expirados e ficaram disponíveis apenas para envio manual.` : ""}` });
       await loadConfig();
     } catch (error) { setImportError(error instanceof Error ? error.message : "Erro ao importar"); }
     finally { setBusy(""); actionPending.current = false; }

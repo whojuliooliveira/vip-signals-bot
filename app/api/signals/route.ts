@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSignalExpired, parseSignalInput, sortSignalsByOperationDate, validateSignalTime } from "../../../lib/signals";
 import { deleteSignalList, deleteSignalsByIds, loadSignalList, loadStore, localDateKey, saveSignalChanges, uid, type ScheduledSignal } from "../../../lib/store";
+import { deleteGananciaSignalList, shouldSyncWithGanancia, syncGananciaSignalList } from "../../../lib/gananciaSync";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -73,7 +74,29 @@ export async function POST(request: NextRequest) {
   // of disappearing before the replacement has been safely stored.
   if (body.confirmReplace) await deleteSignalsByIds(wouldRemove.map((signal) => signal.id));
   const expired = created.filter((signal) => isSignalExpired(signal.dateKey, signal.time)).length;
-  return NextResponse.json({ ok: true, createdCount: created.length, expired });
+  const finalList = store.signals.filter((signal) => signal.projectId === selectedProjectId && signal.dateKey === dateKey);
+  if (shouldSyncWithGanancia(selectedProjectId)) {
+    try {
+      await syncGananciaSignalList(dateKey, finalList);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "falha desconhecida";
+      return NextResponse.json({
+        ok: false,
+        persisted: true,
+        createdCount: created.length,
+        totalCount: finalList.length,
+        expired,
+        error: `A lista foi salva no Disparador, mas o Ganancia App não confirmou a sincronização: ${detail} Tente salvar novamente.`,
+      }, { status: 502 });
+    }
+  }
+  return NextResponse.json({
+    ok: true,
+    createdCount: created.length,
+    totalCount: finalList.length,
+    expired,
+    gananciaSynced: shouldSyncWithGanancia(selectedProjectId),
+  });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -86,6 +109,14 @@ export async function DELETE(request: NextRequest) {
 
   const store = await loadStore();
   const removed = await loadSignalList(projectId, dateKey, store);
+  if (shouldSyncWithGanancia(projectId)) {
+    try {
+      await deleteGananciaSignalList(dateKey);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "falha desconhecida";
+      return NextResponse.json({ ok: false, error: `O Ganancia App não confirmou a exclusão: ${detail}` }, { status: 502 });
+    }
+  }
   store.signals = store.signals.filter((signal) => signal.projectId !== projectId || signal.dateKey !== dateKey);
   await deleteSignalList(projectId, dateKey);
   await saveSignalChanges(store, []);
