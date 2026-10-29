@@ -64,6 +64,12 @@ export function resolveProjectConfig(id: string, savedProjects: ProjectSettings[
         DOWN: withCurrentBrokerLink(saved.signalTemplates.DOWN, link),
       }
     : undefined;
+  const messageTemplates = saved?.messageTemplates
+    ? Object.fromEntries(Object.entries(saved.messageTemplates).map(([kind, template]) => [
+        kind,
+        withCurrentBrokerLink(template, link),
+      ])) as Partial<Record<MessageKind, CapturedTemplate>>
+    : undefined;
   return {
     ...base,
     name: saved?.name || base.name,
@@ -73,7 +79,7 @@ export function resolveProjectConfig(id: string, savedProjects: ProjectSettings[
     link,
     brokerLabel: saved?.brokerLabel || base.brokerLabel,
     signalTemplates,
-    messageTemplates: saved?.messageTemplates,
+    messageTemplates,
     telegramAccount: language === "es"
       ? { ...telegramAccount, sendMode: "user" }
       : telegramAccount,

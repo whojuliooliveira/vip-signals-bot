@@ -7,6 +7,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileMo
 const { dayMode, localWeekday, localDateKey, defaultMessages, scheduleSignalSlots } = require("../lib/store.ts");
 const { goodNightReturnHour, standardMessagePayload } = require("../lib/standardMessages.ts");
 const { directionText, renderSavedSignalTemplate, renderSignal, withCurrentBrokerLink } = require("../lib/templates.ts");
+const { resolveProjectConfig } = require("../lib/projects.ts");
 const { limitAutomaticSignals, signalOperationEnd, signalOperationStart, validateSignalTime } = require("../lib/signals.ts");
 assert.equal(dayMode(new Date("2026-10-11T02:30:00Z")), "saturday");
 assert.equal(dayMode(new Date("2026-10-11T03:00:00Z")), "sunday");
@@ -84,6 +85,26 @@ const staleTomTemplate = withCurrentBrokerLink({
 assert.match(staleTomTemplate.html, /utm_campaign=59368/);
 assert.equal(staleTomTemplate.entities[0].url, tomReedLink);
 assert.equal(staleTomTemplate.buttons[0][0].url, tomReedLink);
+const resolvedTom = resolveProjectConfig("expert_b", [{
+  id: "expert_b",
+  name: "Tom",
+  language: "en",
+  link: tomReedLink,
+  brokerLabel: "Click here",
+  enabled: true,
+  messageTemplates: {
+    good_night: {
+      id: "stale-good-night-link",
+      kind: "good_night",
+      html: '<a href="https://u3.shortink.io/smart/HLsHbhHwDmx6gu">Sign up</a>',
+      text: "Sign up",
+      entities: [{ type: "text_link", offset: 0, length: 7, url: "https://u3.shortink.io/smart/HLsHbhHwDmx6gu" }],
+      capturedAt: new Date().toISOString(),
+    },
+  },
+}]);
+assert.equal(resolvedTom.messageTemplates.good_night.entities[0].url, tomReedLink);
+assert.match(resolvedTom.messageTemplates.good_night.html, /utm_campaign=59368/);
 assert.equal(goodNightReturnHour(new Date("2026-10-17T07:01:00Z")), 8);
 assert.equal(goodNightReturnHour(new Date("2026-10-18T03:02:00Z")), 9);
 assert.equal(goodNightReturnHour(new Date("2026-10-19T03:01:00Z")), 7);
