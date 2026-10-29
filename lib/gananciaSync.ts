@@ -5,7 +5,7 @@ const DEFAULT_SYNC_URL = "https://www.gananciaapp.com/api/internal/signals/sync"
 
 function getSyncConfig() {
   const url = process.env.GANANCIA_APP_SYNC_URL || DEFAULT_SYNC_URL;
-  const secret = process.env.GANANCIA_APP_SYNC_SECRET || process.env.CRON_SECRET;
+  const secret = process.env.GANANCIA_APP_SYNC_SECRET;
   if (!secret) throw new Error("Integração com Ganancia App não configurada.");
   return { url, secret };
 }
