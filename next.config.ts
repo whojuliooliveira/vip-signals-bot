@@ -4,8 +4,12 @@ const operationalOrigin = (process.env.OPERATIONAL_API_ORIGIN || "https://rupto-
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    if (!process.env.VERCEL) return [];
-    return [{ source: "/api/:path*", destination: `${operationalOrigin}/api/:path*` }];
+    if (!process.env.VERCEL) return { beforeFiles: [], afterFiles: [], fallback: [] };
+    return {
+      beforeFiles: [{ source: "/api/:path*", destination: `${operationalOrigin}/api/:path*` }],
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 
