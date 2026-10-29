@@ -79,7 +79,7 @@ function normalizeBotChatId(chatId) {
 }
 
 function testHtml(pair, time) {
-  const link = process.env.PROJECT_2_LINK || "https://u3.shortink.io/smart/HLsHbhHwDmx6gu";
+  const link = process.env.PROJECT_2_LINK || "https://u3.shortink.io/register?utm_campaign=59368&utm_source=affiliate&utm_medium=sr&a=HLsHbhHwDmx6gu&al=1801689&ac=tom-reed&cid=984587&code=50START";
   return [
     "<blockquote><tg-emoji emoji-id=\"5215522595922779944\">🟢</tg-emoji> <b><i>VIP SIGNAL</i></b> <tg-emoji emoji-id=\"5215522595922779944\">🟢</tg-emoji></blockquote>",
     "",

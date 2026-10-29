@@ -252,7 +252,7 @@ export const defaultProjects: ProjectSettings[] = [
     id: "expert_b",
     name: "💎 Tom Reed | VIP Signals 💎",
     language: "en",
-    link: "https://u3.shortink.io/smart/HLsHbhHwDmx6gu",
+    link: "https://u3.shortink.io/register?utm_campaign=59368&utm_source=affiliate&utm_medium=sr&a=HLsHbhHwDmx6gu&al=1801689&ac=tom-reed&cid=984587&code=50START",
     brokerLabel: "Click here",
     enabled: true,
   },

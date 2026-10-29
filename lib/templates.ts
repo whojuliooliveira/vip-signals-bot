@@ -24,7 +24,7 @@ export type RenderedTelegramMessage = {
   entities?: TelegramEntity[];
 };
 
-const BROKER_REGISTRATION_LINK = /https?:\/\/(?:www\.)?(?:quotex\.com|broker-qx\.pro)\/sign-up\/?\?[^\s\"'<>]*/gi;
+const BROKER_REGISTRATION_LINK = /https?:\/\/(?:www\.)?(?:(?:quotex\.com|broker-qx\.pro)\/sign-up\/?\?[^\s\"'<>]*|u3\.shortink\.io\/[^\s\"'<>]*)/gi;
 
 export function withCurrentBrokerLink(template: CapturedTemplate | undefined, brokerLink: string): CapturedTemplate | undefined {
   if (!template || !brokerLink) return template;

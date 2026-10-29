@@ -71,6 +71,19 @@ const staleBrokerTemplate = withCurrentBrokerLink({
 assert.match(staleBrokerTemplate.html, /sign-up\?lid=1060640/);
 assert.equal(staleBrokerTemplate.entities[0].url, "https://quotex.com/sign-up?lid=1060640");
 assert.equal(staleBrokerTemplate.buttons[0][0].url, "https://quotex.com/sign-up?lid=1060640");
+const tomReedLink = "https://u3.shortink.io/register?utm_campaign=59368&utm_source=affiliate&utm_medium=sr&a=HLsHbhHwDmx6gu&al=1801689&ac=tom-reed&cid=984587&code=50START";
+const staleTomTemplate = withCurrentBrokerLink({
+  id: "stale-tom-link",
+  kind: "signal_down",
+  html: '<a href="https://u3.shortink.io/smart/HLsHbhHwDmx6gu">Click here</a>',
+  text: "Click here",
+  entities: [{ type: "text_link", offset: 0, length: 10, url: "https://u3.shortink.io/smart/HLsHbhHwDmx6gu" }],
+  buttons: [[{ text: "Click here", url: "https://u3.shortink.io/smart/HLsHbhHwDmx6gu" }]],
+  capturedAt: new Date().toISOString(),
+}, tomReedLink);
+assert.match(staleTomTemplate.html, /utm_campaign=59368/);
+assert.equal(staleTomTemplate.entities[0].url, tomReedLink);
+assert.equal(staleTomTemplate.buttons[0][0].url, tomReedLink);
 assert.equal(goodNightReturnHour(new Date("2026-10-17T07:01:00Z")), 8);
 assert.equal(goodNightReturnHour(new Date("2026-10-18T03:02:00Z")), 9);
 assert.equal(goodNightReturnHour(new Date("2026-10-19T03:01:00Z")), 7);
